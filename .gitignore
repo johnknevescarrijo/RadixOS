@@ -1,0 +1,21 @@
+# Build outputs
+build/
+bin/
+*.elf
+*.bin
+*.map
+*.hex
+*.o
+*.d
+*.a
+
+# Test artifacts
+tests/test_sched_host
+test_sched_host
+
+# Editor / IDE directories
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
