@@ -33,19 +33,22 @@ ASFLAGS := -mlongcalls $(INCLUDES)
 
 LDFLAGS := -T linker/esp32s3_ram.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/radixos.map
 
-# Source files for bare-metal build (Step 1)
+# Source files for bare-metal build
 SRCS_S := arch/xtensa/boot.S \
-          arch/xtensa/vectors.S
+          arch/xtensa/vectors.S \
+          arch/xtensa/context_switch.S
 
 SRCS_C := kernel/main.c \
           kernel/kprintf.c \
+          kernel/sched.c \
           drivers/uart.c \
-          drivers/wdt.c
+          drivers/wdt.c \
+          drivers/systimer.c
 
 OBJS := $(addprefix $(BUILD_DIR)/, $(SRCS_S:.S=.o) $(SRCS_C:.c=.o))
 
 # Targets
-.PHONY: all clean
+.PHONY: all clean host-check
 
 all: $(BUILD_DIR)/radixos.bin $(BUILD_DIR)/radixos.elf
 	@echo "=== RadixOS Build Complete ==="
@@ -70,6 +73,22 @@ $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 	@echo "[CC] $<"
+
+# Host Test Target (Logic Verification without Xtensa hardware)
+HOST_TEST_BIN := $(BUILD_DIR)/test_sched_host
+HOST_TEST_SRCS := tests/test_sched_host.c \
+                  kernel/sched.c \
+                  kernel/kprintf.c \
+                  drivers/uart.c \
+                  drivers/wdt.c \
+                  drivers/systimer.c
+
+host-check:
+	@mkdir -p $(BUILD_DIR)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SRCS) -o $(HOST_TEST_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_BIN)"
+	@echo "Running RadixOS host simulation..."
+	@$(HOST_TEST_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)

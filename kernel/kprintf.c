@@ -76,6 +76,10 @@ int kvprintf(const char *fmt, va_list args) {
             i++;
         }
 
+        if (fmt[i] == 'l') {
+            i++; /* Skip length modifier for 32-bit long */
+        }
+
         switch (fmt[i]) {
             case 'c': {
                 char c = (char)va_arg(args, int);

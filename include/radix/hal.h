@@ -21,6 +21,10 @@ uint64_t systimer_get_ticks(void);
 
 /* Architecture-specific context switch */
 void arch_context_switch(struct cpu_context **prev_ctx, struct cpu_context *next_ctx);
+#ifndef RADIX_HOST_TEST
 void arch_start_first_task(struct cpu_context *first_ctx) __attribute__((noreturn));
+#else
+void arch_start_first_task(struct cpu_context *first_ctx);
+#endif
 
 #endif /* RADIX_HAL_H */
