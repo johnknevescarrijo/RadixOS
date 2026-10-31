@@ -36,11 +36,14 @@ LDFLAGS := -T linker/esp32s3_ram.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/radixos.map
 # Source files for bare-metal build
 SRCS_S := arch/xtensa/boot.S \
           arch/xtensa/vectors.S \
-          arch/xtensa/context_switch.S
+          arch/xtensa/context_switch.S \
+          arch/xtensa/atomic.S
 
 SRCS_C := kernel/main.c \
           kernel/kprintf.c \
           kernel/sched.c \
+          kernel/sync.c \
+          kernel/ipc.c \
           drivers/uart.c \
           drivers/wdt.c \
           drivers/systimer.c
