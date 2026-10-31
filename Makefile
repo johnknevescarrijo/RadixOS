@@ -119,6 +119,22 @@ HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
                       drivers/wdt.c \
                       drivers/systimer.c
 
+HOST_TEST_PMS_SYSCALL_BIN := $(BUILD_DIR)/test_pms_syscall_host
+HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
+                              kernel/amp.c \
+                              kernel/syscall.c \
+                              kernel/sched.c \
+                              kernel/ipc.c \
+                              kernel/sync.c \
+                              kernel/kprintf.c \
+                              drivers/world.c \
+                              drivers/pms.c \
+                              drivers/system.c \
+                              drivers/ipi.c \
+                              drivers/uart.c \
+                              drivers/wdt.c \
+                              drivers/systimer.c
+
 host-check:
 	@mkdir -p $(BUILD_DIR)
 	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SCHED_SRCS) -o $(HOST_TEST_SCHED_BIN)
@@ -133,6 +149,10 @@ host-check:
 	@echo "[HOST_CC] Compiled $(HOST_TEST_AMP_BIN)"
 	@echo "Running RadixOS host simulation (Step 4 Asymmetric Multiprocessing & IPIs)..."
 	@$(HOST_TEST_AMP_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_PMS_SYSCALL_SRCS) -o $(HOST_TEST_PMS_SYSCALL_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_PMS_SYSCALL_BIN)"
+	@echo "Running RadixOS host simulation (Step 5 World Controller, PMS MPU & Syscalls)..."
+	@$(HOST_TEST_PMS_SYSCALL_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)
