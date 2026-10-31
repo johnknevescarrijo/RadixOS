@@ -25,4 +25,10 @@ tcb_t *sched_get_current_task(void);
 /* Default task exit handler if a task function returns */
 void task_exit(void) __attribute__((noreturn));
 
+/* Task blocking and unblocking helpers */
+void sched_block_current(void);
+void sched_block_current_task(void);
+void sched_unblock(tcb_t *task);
+void sched_unblock_task(tcb_t *task);
+
 #endif /* RADIX_SCHED_H */

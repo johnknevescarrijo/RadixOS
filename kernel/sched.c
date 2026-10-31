@@ -231,3 +231,25 @@ void sched_start(void) {
     while (1) {}
 #endif
 }
+
+void sched_block_current(void) {
+    tcb_t *curr = sched_get_current_task();
+    if (curr) {
+        curr->state = TASK_STATE_BLOCKED;
+    }
+    sched_yield();
+}
+
+void sched_block_current_task(void) {
+    sched_block_current();
+}
+
+void sched_unblock(tcb_t *task) {
+    if (task && task->state == TASK_STATE_BLOCKED) {
+        task->state = TASK_STATE_READY;
+    }
+}
+
+void sched_unblock_task(tcb_t *task) {
+    sched_unblock(task);
+}
