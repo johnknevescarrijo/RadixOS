@@ -78,7 +78,7 @@ static int cmd_help(int argc, char *argv[]) {
     (void)argv;
     kprintf(SHELL_VT100_BOLD "\nRadixOS Kernel Shell Commands:\n" SHELL_VT100_RESET);
     for (size_t i = 0; i < g_num_shell_cmds; i++) {
-        kprintf("  " SHELL_VT100_CYAN "%-8s" SHELL_VT100_RESET " - %s\n",
+        kprintf("  " SHELL_VT100_CYAN "%s" SHELL_VT100_RESET "\t- %s\n",
                 g_shell_cmds[i].name, g_shell_cmds[i].usage);
     }
     return SHELL_OK;
@@ -117,8 +117,7 @@ static int cmd_info(int argc, char *argv[]) {
 static int cmd_ps(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
-    kprintf(SHELL_VT100_BOLD "\n%-4s %-16s %-6s %-10s %-6s\n" SHELL_VT100_RESET,
-            "ID", "NAME", "PRIO", "STATE", "SLICE");
+    kprintf(SHELL_VT100_BOLD "\nID   NAME             PRIO   STATE        SLICE\n" SHELL_VT100_RESET);
     kprintf("-----------------------------------------------\n");
 
     for (uint32_t i = 0; i < MAX_TASKS; i++) {
@@ -132,7 +131,7 @@ static int cmd_ps(int argc, char *argv[]) {
                 case TASK_STATE_SUSPENDED: st = "SUSPENDED"; break;
                 default: break;
             }
-            kprintf("%-4u %-16s %-6u %-10s %-6u\n",
+            kprintf("%u    %s\t\t%u      %s\t   %u\n",
                     (unsigned int)t->task_id, t->name, (unsigned int)t->priority,
                     st, (unsigned int)t->slice_remaining);
         }
