@@ -23,7 +23,11 @@ void sched_tick(void);
 tcb_t *sched_get_current_task(void);
 
 /* Default task exit handler if a task function returns */
+#ifndef RADIX_HOST_TEST
 void task_exit(void) __attribute__((noreturn));
+#else
+void task_exit(void);
+#endif
 
 /* Task blocking and unblocking helpers */
 void sched_block_current(void);

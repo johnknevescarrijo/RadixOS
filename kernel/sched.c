@@ -29,8 +29,10 @@ void task_exit(void) {
     }
     sched_yield();
 
+#ifndef RADIX_HOST_TEST
     /* Unreachable safeguard */
     while (1) {}
+#endif
 }
 
 void sched_init(void) {
