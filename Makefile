@@ -102,6 +102,19 @@ HOST_TEST_SYNC_IPC_SRCS := tests/test_sync_ipc_host.c \
                            drivers/wdt.c \
                            drivers/systimer.c
 
+HOST_TEST_AMP_BIN := $(BUILD_DIR)/test_amp_host
+HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
+                      kernel/amp.c \
+                      kernel/ipc.c \
+                      kernel/sync.c \
+                      kernel/sched.c \
+                      kernel/kprintf.c \
+                      drivers/system.c \
+                      drivers/ipi.c \
+                      drivers/uart.c \
+                      drivers/wdt.c \
+                      drivers/systimer.c
+
 host-check:
 	@mkdir -p $(BUILD_DIR)
 	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SCHED_SRCS) -o $(HOST_TEST_SCHED_BIN)
@@ -112,6 +125,10 @@ host-check:
 	@echo "[HOST_CC] Compiled $(HOST_TEST_SYNC_IPC_BIN)"
 	@echo "Running RadixOS host simulation (Step 3 Atomics, Sync & Zero-Copy IPC)..."
 	@$(HOST_TEST_SYNC_IPC_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_AMP_SRCS) -o $(HOST_TEST_AMP_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_AMP_BIN)"
+	@echo "Running RadixOS host simulation (Step 4 Asymmetric Multiprocessing & IPIs)..."
+	@$(HOST_TEST_AMP_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)
