@@ -54,6 +54,7 @@
  * RTC Controller Watchdog & Super WDT Registers (Base: 0x60008000)
  */
 #define RTC_CNTL_OPTIONS0_REG        (DR_REG_RTCCNTL_BASE + 0x0000)
+#define RTC_CNTL_SW_SYS_RST          BIT(31)
 #define RTC_CNTL_WDTCONFIG0_REG      (DR_REG_RTCCNTL_BASE + 0x0098)
 #define RTC_CNTL_WDTCONFIG1_REG      (DR_REG_RTCCNTL_BASE + 0x009C)
 #define RTC_CNTL_WDTFEED_REG         (DR_REG_RTCCNTL_BASE + 0x00A8)
@@ -65,6 +66,22 @@
 #define RTC_CNTL_WDT_EN_BIT          BIT(31)
 #define RTC_CNTL_SWD_AUTO_FEED_EN    BIT(31)
 #define RTC_CNTL_SWD_DISABLE         BIT(30)
+
+/*
+ * RTC Slow Memory & ULP-RISC-V Coprocessor Registers
+ */
+#define DR_REG_RTC_SLOWMEM_BASE      0x50000000
+#define RTC_SLOWMEM_SIZE             8192
+#define RTC_ULP_MAILBOX_OFFSET       0x1F00
+
+#define RTC_CNTL_ULP_CP_TIMER_REG    (DR_REG_RTCCNTL_BASE + 0x00F8)
+#define RTC_CNTL_ULP_CP_SLP_TIMER_EN BIT(31)
+#define RTC_CNTL_ULP_CP_CTRL_REG     (DR_REG_RTCCNTL_BASE + 0x00FC)
+#define RTC_CNTL_COCPU_CTRL_REG      (DR_REG_RTCCNTL_BASE + 0x0100)
+#define RTC_CNTL_COCPU_CLK_FO        BIT(0)
+#define RTC_CNTL_COCPU_DONE          BIT(21)
+#define RTC_CNTL_COCPU_SW_RESET_EN   BIT(22)
+#define RTC_CNTL_ULP_CP_TIMER_1_REG  (DR_REG_RTCCNTL_BASE + 0x0130)
 
 /*
  * Systimer Registers (Base: 0x60023000)

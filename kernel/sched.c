@@ -255,3 +255,29 @@ void sched_unblock(tcb_t *task) {
 void sched_unblock_task(tcb_t *task) {
     sched_unblock(task);
 }
+
+const tcb_t *sched_get_task_by_index(uint32_t index) {
+    if (index >= MAX_TASKS) {
+        return NULL;
+    }
+    return &s_tasks[index];
+}
+
+bool sched_kill_task(uint32_t task_id) {
+    if (task_id == 0) {
+        /* Idle task is protected */
+        return false;
+    }
+
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (s_tasks[i].state != TASK_STATE_UNUSED && s_tasks[i].task_id == task_id) {
+            s_tasks[i].state = TASK_STATE_UNUSED;
+            kprintf("[SCHED] Task '%s' (id=%u) killed.\n", s_tasks[i].name, (unsigned int)task_id);
+            if (i == s_current_task_idx) {
+                sched_yield();
+            }
+            return true;
+        }
+    }
+    return false;
+}
