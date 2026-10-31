@@ -24,6 +24,7 @@ SECTIONS
     _text_start = .;
     *(.literal .text .literal.* .text.*)
     *(.iram0 .iram0.*)
+    *(.iram1 .iram1.*)
     . = ALIGN(4);
     _text_end = .;
   } > iram0_seg

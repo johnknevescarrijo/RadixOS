@@ -27,6 +27,7 @@
 #define SR_CCOMPARE0        240
 #define SR_CCOMPARE1        241
 #define SR_CCOMPARE2        242
+#define SR_PRID             235
 
 /* Processor Status (PS) bitfields */
 #define PS_INTLEVEL_MASK    0x0000000F
