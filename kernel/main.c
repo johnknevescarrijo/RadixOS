@@ -7,11 +7,14 @@
 #include <radix/amp.h>
 #include <radix/pms.h>
 #include <radix/syscall.h>
+#include <radix/ulp.h>
+#include <radix/shell.h>
 
 #define TASK_STACK_SIZE 2048
 
 static uint8_t s_heartbeat_stack[TASK_STACK_SIZE] __attribute__((aligned(16)));
 static uint8_t s_worker_stack[TASK_STACK_SIZE]    __attribute__((aligned(16)));
+static uint8_t s_shell_stack[TASK_STACK_SIZE]     __attribute__((aligned(16)));
 
 /* Inter-Task Zero-Copy IPC Channel and Synchronization */
 static ipc_channel_t s_kchannel;
@@ -134,6 +137,7 @@ void kernel_early_init(void) {
     kprintf("[BOOT] Step 3 status    : ATOMICS (S32C1I), SYNC & ZERO-COPY IPC ACTIVE\n");
     kprintf("[BOOT] Step 4 status    : ASYMMETRIC MULTIPROCESSING (AMP DUAL-CORE) ACTIVE\n");
     kprintf("[BOOT] Step 5 status    : WORLD CONTROLLER, PMS MPU & SYSCALLS ACTIVE\n");
+    kprintf("[BOOT] Step 6 status    : INTERACTIVE RADIX-SHELL & RISC-V ULP ACTIVE\n");
     kputs("======================================================\n\n");
 
     /* Initialize World Controller & PMS memory protection */
@@ -146,6 +150,14 @@ void kernel_early_init(void) {
     /* Initialize Asymmetric Multiprocessing (AMP) and Core 1 bring-up */
     amp_init();
 
+    /* Initialize RISC-V ULP Coprocessor and start periodic telemetry */
+    ulp_init();
+    ulp_load_default_firmware();
+    ulp_start(50000);
+
+    /* Initialize interactive Radix-Shell */
+    shell_init();
+
     /* Initialize the nano-kernel scheduler */
     sched_init();
 
@@ -155,7 +167,8 @@ void kernel_early_init(void) {
     s_stats.sent = 0;
     s_stats.recv = 0;
 
-    /* Create sample workloads demonstrating IPC & Mutex */
+    /* Create sample workloads and shell task */
+    task_create("shell", shell_task, NULL, 3, s_shell_stack, sizeof(s_shell_stack));
     task_create("heartbeat", heartbeat_task, NULL, 1, s_heartbeat_stack, sizeof(s_heartbeat_stack));
     task_create("worker", worker_task, NULL, 2, s_worker_stack, sizeof(s_worker_stack));
 

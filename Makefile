@@ -48,10 +48,12 @@ SRCS_C := kernel/main.c \
           kernel/ipc.c \
           kernel/amp.c \
           kernel/syscall.c \
+          kernel/shell.c \
           drivers/system.c \
           drivers/ipi.c \
           drivers/world.c \
           drivers/pms.c \
+          drivers/ulp.c \
           drivers/uart.c \
           drivers/wdt.c \
           drivers/systimer.c

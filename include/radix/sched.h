@@ -35,4 +35,8 @@ void sched_block_current_task(void);
 void sched_unblock(tcb_t *task);
 void sched_unblock_task(tcb_t *task);
 
+/* Task inspection and management */
+const tcb_t *sched_get_task_by_index(uint32_t index);
+bool sched_kill_task(uint32_t task_id);
+
 #endif /* RADIX_SCHED_H */
