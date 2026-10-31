@@ -4,6 +4,7 @@
 #include <radix/sched.h>
 #include <radix/sync.h>
 #include <radix/ipc.h>
+#include <radix/amp.h>
 
 #define TASK_STACK_SIZE 2048
 
@@ -64,6 +65,10 @@ static void heartbeat_task(void *arg) {
         } else {
             kprintf("[HEARTBEAT] Core 0 pulse=%u, IPC channel full\n", (unsigned int)count);
         }
+
+        /* Dispatch AMP work request to Core 1 */
+        amp_send_to_core(RADIX_CORE_1, AMP_MSG_WORK_REQUEST, &count, sizeof(count));
+
         count++;
 
         for (volatile int i = 0; i < 500000; i++) {}
@@ -92,6 +97,19 @@ static void worker_task(void *arg) {
         } else {
             kprintf("[WORKER] Batch #%u: no IPC messages available\n", (unsigned int)iteration);
         }
+
+        /* Check for incoming AMP messages from Core 1 */
+        uint32_t amp_msg_id = 0;
+        uint32_t amp_res = 0;
+        uint16_t amp_len = 0;
+        if (amp_recv_from_peer(&amp_msg_id, &amp_res, &amp_len)) {
+            if (amp_msg_id == AMP_MSG_CORE1_READY) {
+                kprintf("[WORKER] Core 1 boot acknowledged (READY)\n");
+            } else if (amp_msg_id == AMP_MSG_WORK_RESPONSE) {
+                kprintf("[WORKER] Received AMP result from Core 1: %u\n", (unsigned int)amp_res);
+            }
+        }
+
         iteration++;
 
         for (volatile int i = 0; i < 800000; i++) {}
@@ -116,7 +134,11 @@ void kernel_early_init(void) {
     kprintf("[BOOT] Step 1 status    : SUCCESSFUL\n");
     kprintf("[BOOT] Step 2 status    : PREEMPTIVE NANO-KERNEL ACTIVE\n");
     kprintf("[BOOT] Step 3 status    : ATOMICS (S32C1I), SYNC & ZERO-COPY IPC ACTIVE\n");
+    kprintf("[BOOT] Step 4 status    : ASYMMETRIC MULTIPROCESSING (AMP DUAL-CORE) ACTIVE\n");
     kputs("======================================================\n\n");
+
+    /* Initialize Asymmetric Multiprocessing (AMP) and Core 1 bring-up */
+    amp_init();
 
     /* Initialize the nano-kernel scheduler */
     sched_init();
