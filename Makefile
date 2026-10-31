@@ -37,6 +37,7 @@ LDFLAGS := -T linker/esp32s3_ram.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/radixos.map
 SRCS_S := arch/xtensa/boot.S \
           arch/xtensa/boot_core1.S \
           arch/xtensa/vectors.S \
+          arch/xtensa/syscall_handler.S \
           arch/xtensa/context_switch.S \
           arch/xtensa/atomic.S
 
@@ -46,8 +47,11 @@ SRCS_C := kernel/main.c \
           kernel/sync.c \
           kernel/ipc.c \
           kernel/amp.c \
+          kernel/syscall.c \
           drivers/system.c \
           drivers/ipi.c \
+          drivers/world.c \
+          drivers/pms.c \
           drivers/uart.c \
           drivers/wdt.c \
           drivers/systimer.c
