@@ -66,12 +66,8 @@ _level1_vector_handler:
     /* Check if this is a Level 1 hardware interrupt */
     beqi    a2, EXCCAUSE_LEVEL1_INTERRUPT, .L_handle_interrupt
 
-    /* Check if this is a syscall */
-    beqi    a2, EXCCAUSE_SYSTEM_CALL, .L_handle_syscall
-
-    /* Otherwise, general exception handler */
-    rsr     a2, SR_EXCSAVE1
-    j       radix_unhandled_exception
+    /* Forward syscall or hardware fault to full trap frame handler */
+    j       _xtensa_syscall_and_fault_entry
 
 .L_handle_interrupt:
     rsr     a2, SR_EXCSAVE1
@@ -83,19 +79,12 @@ _level1_vector_handler:
     addi    a1, a1, 16
     rfe
 
-.L_handle_syscall:
-    rsr     a2, SR_EXCSAVE1
-    /* Advance EPC1 past syscall instruction (3 bytes in Xtensa) */
-    addi    a1, a1, -16
-    s32i    a0, a1, 0
-    call0   radix_syscall_handler
-    l32i    a0, a1, 0
-    addi    a1, a1, 16
-    rfe
-
     .align 4
 _user_exception_handler:
-    j       _level1_vector_handler
+    wsr     a2, SR_EXCSAVE1
+    rsr     a2, SR_EXCCAUSE
+    beqi    a2, EXCCAUSE_LEVEL1_INTERRUPT, .L_handle_interrupt
+    j       _xtensa_syscall_and_fault_entry
 
     .align 4
     .global radix_unhandled_exception

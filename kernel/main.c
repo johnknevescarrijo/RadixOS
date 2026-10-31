@@ -5,6 +5,8 @@
 #include <radix/sync.h>
 #include <radix/ipc.h>
 #include <radix/amp.h>
+#include <radix/pms.h>
+#include <radix/syscall.h>
 
 #define TASK_STACK_SIZE 2048
 
@@ -29,10 +31,6 @@ void radix_level1_interrupt_handler(void) {
 #ifndef RADIX_HOST_TEST
     systimer_isr();
 #endif
-}
-
-void radix_syscall_handler(void) {
-    /* Level 1 Syscall Handler - Step 5 gateway */
 }
 
 void hal_early_init(void) {
@@ -135,7 +133,15 @@ void kernel_early_init(void) {
     kprintf("[BOOT] Step 2 status    : PREEMPTIVE NANO-KERNEL ACTIVE\n");
     kprintf("[BOOT] Step 3 status    : ATOMICS (S32C1I), SYNC & ZERO-COPY IPC ACTIVE\n");
     kprintf("[BOOT] Step 4 status    : ASYMMETRIC MULTIPROCESSING (AMP DUAL-CORE) ACTIVE\n");
+    kprintf("[BOOT] Step 5 status    : WORLD CONTROLLER, PMS MPU & SYSCALLS ACTIVE\n");
     kputs("======================================================\n\n");
+
+    /* Initialize World Controller & PMS memory protection */
+    world_init();
+    pms_init();
+
+    /* Configure Region 2: User Task Memory Sandbox & Stacks */
+    pms_configure_region(2, 0x3FC98000, 0x20000, PMS_PERM_RWX, PMS_PERM_RWX);
 
     /* Initialize Asymmetric Multiprocessing (AMP) and Core 1 bring-up */
     amp_init();
