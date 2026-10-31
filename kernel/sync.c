@@ -156,6 +156,11 @@ void mutex_lock(mutex_t *mutex) {
         spinlock_release_irqrestore(&mutex->lock, flags);
 
         sched_yield();
+#ifdef RADIX_HOST_TEST
+        if (curr && curr->state == TASK_STATE_BLOCKED) {
+            return;
+        }
+#endif
     }
 }
 
@@ -258,6 +263,11 @@ void sem_wait(semaphore_t *sem) {
         spinlock_release_irqrestore(&sem->lock, flags);
 
         sched_yield();
+#ifdef RADIX_HOST_TEST
+        if (curr && curr->state == TASK_STATE_BLOCKED) {
+            return;
+        }
+#endif
     }
 }
 
