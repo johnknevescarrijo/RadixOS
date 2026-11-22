@@ -222,6 +222,7 @@ HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
 HOST_TEST_SHELL_ULP_BIN := $(BUILD_DIR)/test_shell_ulp_host
 HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             kernel/shell.c \
+                            kernel/mm.c \
                             drivers/ulp.c \
                             kernel/amp.c \
                             kernel/syscall.c \
@@ -258,6 +259,7 @@ HOST_TEST_INTC_SRCS := tests/test_intc_host.c \
 HOST_TEST_TIMERS_UART_BIN := $(BUILD_DIR)/test_timers_uart_host
 HOST_TEST_TIMERS_UART_SRCS := tests/test_timers_uart_host.c \
                               kernel/shell.c \
+                              kernel/mm.c \
                               drivers/ulp.c \
                               drivers/intc.c \
                               drivers/system.c \

@@ -11,6 +11,7 @@
 #include <radix/kprintf.h>
 #include <radix/sched.h>
 #include <radix/pms.h>
+#include <radix/mm.h>
 #include <radix/syscall.h>
 #include <radix/amp.h>
 #include <radix/ulp.h>
@@ -57,6 +58,7 @@ static int shell_atoi(const char *s) {
 static int cmd_help(int argc, char *argv[]);
 static int cmd_info(int argc, char *argv[]);
 static int cmd_ps(int argc, char *argv[]);
+static int cmd_mem(int argc, char *argv[]);
 static int cmd_kill(int argc, char *argv[]);
 static int cmd_amp(int argc, char *argv[]);
 static int cmd_ulp(int argc, char *argv[]);
@@ -66,6 +68,7 @@ static const shell_cmd_t g_shell_cmds[] = {
     { "help",   "Display available kernel commands",     cmd_help },
     { "info",   "Show system, PMS, syscall and ULP info", cmd_info },
     { "ps",     "List all active kernel tasks",          cmd_ps },
+    { "mem",    "Show heap memory stats & integrity",    cmd_mem },
     { "kill",   "Terminate a task: kill <id>",           cmd_kill },
     { "amp",    "Show dual-core AMP and IPI status",     cmd_amp },
     { "ulp",    "Inspect & control RISC-V ULP",          cmd_ulp },
@@ -102,6 +105,13 @@ static int cmd_info(int argc, char *argv[]) {
 
     kprintf("  Syscalls Count: %u\n", (unsigned int)syscall_get_total_count());
 
+    mm_stats_t mm_st;
+    mm_get_stats(&mm_st);
+    kprintf("  Free Heap SRAM: %u / %u bytes (peak: %u)\n",
+            (unsigned int)mm_st.free_bytes,
+            (unsigned int)mm_st.total_bytes,
+            (unsigned int)mm_st.peak_used_bytes);
+
     volatile ulp_rtc_mailbox_t *mb = ulp_get_mailbox();
     if (mb) {
         const char *state_str = "OFF";
@@ -118,8 +128,8 @@ static int cmd_info(int argc, char *argv[]) {
 static int cmd_ps(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
-    kprintf(SHELL_VT100_BOLD "\nID   NAME             PRIO   STATE        SLICE\n" SHELL_VT100_RESET);
-    kprintf("-----------------------------------------------\n");
+    kprintf(SHELL_VT100_BOLD "\nID   NAME             PRIO   STATE        SLICE   STACK (HWM/SIZE)  CANARY\n" SHELL_VT100_RESET);
+    kprintf("-------------------------------------------------------------------------\n");
 
     for (uint32_t i = 0; i < MAX_TASKS; i++) {
         const tcb_t *t = sched_get_task_by_index(i);
@@ -133,11 +143,37 @@ static int cmd_ps(int argc, char *argv[]) {
                 case TASK_STATE_SUSPENDED: st = "SUSPENDED"; break;
                 default: break;
             }
-            kprintf("%u    %s\t\t%u      %s\t   %u\n",
+            size_t hwm = task_stack_high_water_mark(t);
+            const char *canary_st = task_check_stack_canary(t) ? "OK" : "OVF";
+            kprintf("%u    %s\t\t%u      %s\t   %u     %u/%u\t    %s\n",
                     (unsigned int)t->task_id, t->name, (unsigned int)t->priority,
-                    st, (unsigned int)t->slice_remaining);
+                    st, (unsigned int)t->slice_remaining,
+                    (unsigned int)hwm, (unsigned int)t->stack_size, canary_st);
         }
     }
+    return SHELL_OK;
+}
+
+static int cmd_mem(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
+    mm_stats_t stats;
+    mm_get_stats(&stats);
+    bool integrity_ok = mm_check_integrity();
+
+    kprintf(SHELL_VT100_BOLD "\n=== RadixOS Kernel Heap (MM) ===\n" SHELL_VT100_RESET);
+    kprintf("  Total        : %u bytes\n", (unsigned int)stats.total_bytes);
+    kprintf("  Used         : %u bytes\n", (unsigned int)stats.used_bytes);
+    kprintf("  Free         : %u bytes\n", (unsigned int)stats.free_bytes);
+    kprintf("  Peak         : %u bytes\n", (unsigned int)stats.peak_used_bytes);
+    kprintf("  Largest Free : %u bytes\n", (unsigned int)stats.largest_free_block);
+    kprintf("  Blocks       : %u active (allocs=%u, frees=%u, fails=%u, corrupt=%u)\n",
+            (unsigned int)stats.active_blocks,
+            (unsigned int)stats.alloc_count,
+            (unsigned int)stats.free_count,
+            (unsigned int)stats.failed_allocs,
+            (unsigned int)stats.corrupt_frees);
+    kprintf("  Integrity    : %s\n", integrity_ok ? "OK" : "FAIL");
     return SHELL_OK;
 }
 
