@@ -6,10 +6,13 @@ This document serves as the operational guide and technical specification for AI
 
 ## 🧭 Project Architecture Overview
 
-RadixOS is an evolutionary hybrid operating system written in **C99/C11** and **Xtensa LX7 Assembly**:
-- **Step 1 (Done):** Bare-metal bootloader (`_start`), vector table, watchdog neutralizer, memory map (`IRAM`/`DRAM`), and UART0 polling console with `kprintf`.
-- **Step 2 (Done):** Single-core preemptive nano-kernel, Call0 context switcher (`arch_context_switch`), 52-bit hardware Systimer periodic ticks, and priority-based Round-Robin scheduler.
-- **Steps 3–6 (Pending):** Described in detail below.
+RadixOS is an evolutionary hybrid operating system written in **C99/C11**, **Xtensa LX7 Assembly**, and **RISC-V RV32IMC**:
+- **Step 1 (Done):** Bare-metal bootloader (`_start`), vector table, watchdog neutralizer, memory map (`IRAM`/`DRAM`), and UART0 console with `kprintf`.
+- **Step 2 (Done):** Single-core preemptive nano-kernel, Call0 context switcher (`arch_context_switch`), 52-bit hardware Systimer periodic ticks, Interrupt Matrix (`drivers/intc.c`), deferred ISR preemption, timed sleep (`task_sleep_ms`), and software timers (`ktimer_t`).
+- **Step 3 (Done):** `S32C1I` hardware atomics, IRQ-safe spinlocks, blocking mutexes/semaphores, and zero-copy SPSC IPC channels.
+- **Step 4 (Done):** Asymmetric Multiprocessing (AMP) dual-core bring-up (`boot_core1.S`), hardware IPIs, and remote cross-core execution.
+- **Step 5 (Done):** World Controller (`World 0` / `World 1`), PMS SRAM MPU, and `syscall` trap gateway.
+- **Step 6 (Done):** Interrupt-driven UART0 RX `Radix-Shell`, real RV32IMC ULP firmware compilation (`ulp/ulp_main.c` + `tools/bin2c.py`), ESP32-S3 ROM image generator (`tools/mk_esp32s3_image.py`), and `flash-image` / `qemu` / `flash` Makefile targets.
 
 ---
 
@@ -17,10 +20,10 @@ RadixOS is an evolutionary hybrid operating system written in **C99/C11** and **
 
 ```mermaid
 graph TD
-    S2["Step 2: Preemptive Nano-Kernel (Done)"] --> S3["Step 3: Atomic Synchronization & IPC"]
-    S3 --> S4["Step 4: Asymmetric Multiprocessing (AMP)"]
-    S4 --> S5["Step 5: Hardware Protection (World Controller + PMS)"]
-    S5 --> S6["Step 6: Interactive Shell & ULP Coprocessor"]
+    S2["Step 2: Preemptive Nano-Kernel (Done)"] --> S3["Step 3: Atomic Synchronization & IPC (Done)"]
+    S3 --> S4["Step 4: Asymmetric Multiprocessing (Done)"]
+    S4 --> S5["Step 5: Hardware Protection: World + PMS (Done)"]
+    S5 --> S6["Step 6: Shell, ULP RV32IMC & Flashable Image (Done)"]
 ```
 
 ---
@@ -144,5 +147,6 @@ Provide an interactive serial command line interface (CLI) over UART and leverag
    - Assembly files must use Call0 ABI conventions unless explicitly handling register windows.
    - Preserve comments and memory address constants documented in ESP32-S3 Technical Reference Manual.
 3. **Build & Test Verification**:
-   - Test cross-compilation with `make` (`xtensa-esp32s3-elf-gcc`).
-   - Implement and verify host simulation tests with `make host-check` (`gcc` on Linux host).
+   - Test cross-compilation and ESP32-S3 ROM image packaging with `make` (`xtensa-esp32s3-elf-gcc`, `riscv32-esp-elf-gcc` when present, and `tools/mk_esp32s3_image.py`).
+   - Run all 8 host simulation suites plus image/ELF checks (`< 256 KB`, `--verify`, no `ulp_simulate_wakeup_cycle` in target ELF) with `make host-check`.
+   - Generate a 4 MB SPI flash image with `make flash-image`, emulate with `make qemu` (`qemu-system-xtensa`), or flash hardware with `make flash`.
