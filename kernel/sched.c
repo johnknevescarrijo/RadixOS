@@ -1,4 +1,5 @@
 #include <radix/sched.h>
+#include <radix/sync.h>
 #include <radix/timer.h>
 #include <radix/hal.h>
 #include <radix/atomic.h>
@@ -30,10 +31,12 @@ static void idle_task_entry(void *arg) {
 
 void task_exit(void) {
     if (s_current_task_idx >= 0) {
+        tcb_t *curr = &s_tasks[s_current_task_idx];
         kprintf("[SCHED] Task '%s' (id=%u) exited.\n",
-                s_tasks[s_current_task_idx].name,
-                (unsigned int)s_tasks[s_current_task_idx].task_id);
-        s_tasks[s_current_task_idx].state = TASK_STATE_SUSPENDED;
+                curr->name,
+                (unsigned int)curr->task_id);
+        curr->state = TASK_STATE_SUSPENDED;
+        sync_on_task_killed(curr);
     }
     sched_yield();
 
@@ -47,9 +50,15 @@ void sched_init(void) {
     for (int i = 0; i < MAX_TASKS; i++) {
         s_tasks[i].state = TASK_STATE_UNUSED;
         s_tasks[i].task_id = 0;
+        s_tasks[i].priority = 0;
+        s_tasks[i].base_priority = 0;
+        s_tasks[i].core_affinity = RADIX_CORE_ANY;
         s_tasks[i].ticks_run = 0;
         s_tasks[i].wake_tick = 0;
         s_tasks[i].world = WORLD_0;
+        s_tasks[i].wait_type = TASK_WAIT_NONE;
+        s_tasks[i].wait_obj = NULL;
+        s_tasks[i].owned_mutexes = NULL;
         s_tasks[i].started = false;
         s_tasks[i].pms.stack_base = 0;
         s_tasks[i].pms.stack_size = 0;
@@ -93,6 +102,8 @@ int task_create_in_world(const char *name, task_entry_t entry, void *arg, uint32
     tcb_t *task = &s_tasks[free_slot];
     task->task_id = (priority == 0) ? 0 : s_next_task_id++;
     task->priority = priority;
+    task->base_priority = (priority > 255u) ? 255u : (uint8_t)priority;
+    task->core_affinity = RADIX_CORE_ANY;
     task->state = TASK_STATE_READY;
     task->stack_base = stack_mem;
     task->stack_size = stack_size;
@@ -100,6 +111,9 @@ int task_create_in_world(const char *name, task_entry_t entry, void *arg, uint32
     task->slice_remaining = DEFAULT_TIME_SLICE_TICKS;
     task->wake_tick = 0;
     task->world = (world == WORLD_1) ? WORLD_1 : WORLD_0;
+    task->wait_type = TASK_WAIT_NONE;
+    task->wait_obj = NULL;
+    task->owned_mutexes = NULL;
     task->started = false;
     task->pms.stack_base = (uintptr_t)stack_mem;
     task->pms.stack_size = (size_t)stack_size;
@@ -475,6 +489,8 @@ bool sched_kill_task(uint32_t task_id) {
 
     for (int i = 0; i < MAX_TASKS; i++) {
         if (s_tasks[i].state != TASK_STATE_UNUSED && s_tasks[i].task_id == task_id) {
+            s_tasks[i].state = TASK_STATE_SUSPENDED;
+            sync_on_task_killed(&s_tasks[i]);
             s_tasks[i].state = TASK_STATE_UNUSED;
             kprintf("[SCHED] Task '%s' (id=%u) killed.\n", s_tasks[i].name, (unsigned int)task_id);
             if (i == s_current_task_idx) {
