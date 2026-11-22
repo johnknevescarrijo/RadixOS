@@ -5,6 +5,7 @@
 #include <radix/sync.h>
 #include <radix/ipc.h>
 #include <radix/amp.h>
+#include <radix/intc.h>
 #include <radix/pms.h>
 #include <radix/syscall.h>
 #include <radix/ulp.h>
@@ -30,10 +31,27 @@ static ipc_stats_t s_stats;
 /* Forward declaration for systimer ISR */
 void systimer_isr(void);
 
-void radix_level1_interrupt_handler(void) {
+static void systimer_irq_handler(uint32_t cpu_int_num, void *arg) {
+    (void)cpu_int_num;
+    (void)arg;
 #ifndef RADIX_HOST_TEST
     systimer_isr();
 #endif
+}
+
+static void ipi_irq_handler(uint32_t cpu_int_num, void *arg) {
+    (void)cpu_int_num;
+    (void)arg;
+    uint32_t reasons = ipi_handle_irq();
+    if (reasons & IPI_REASON_RESCHEDULE) {
+        sched_set_need_resched();
+    }
+}
+
+void radix_level1_interrupt_handler(uint32_t pending_mask) {
+    sched_enter_isr();
+    intc_dispatch_pending(pending_mask);
+    sched_exit_isr();
 }
 
 void hal_early_init(void) {
@@ -147,6 +165,11 @@ void kernel_early_init(void) {
     /* Configure Region 2: User Task Memory Sandbox & Stacks */
     pms_configure_region(2, 0x3FC98000, 0x20000, PMS_PERM_RWX, PMS_PERM_RWX);
 
+    /* Initialize Interrupt Matrix and route Core 0 IPI handler */
+    intc_init(RADIX_CORE_0);
+    intc_register_handler(INTC_CPU_LINE_IPI, ipi_irq_handler, NULL);
+    intc_route_irq(RADIX_CORE_0, INT_SRC_CPU_INTR_FROM_CPU_0, INTC_CPU_LINE_IPI);
+
     /* Initialize Asymmetric Multiprocessing (AMP) and Core 1 bring-up */
     amp_init();
 
@@ -174,6 +197,12 @@ void kernel_early_init(void) {
 
     /* Initialize 52-bit hardware Systimer at 100 Hz (10 ms per tick) */
     systimer_init(100);
+    intc_register_handler(INTC_CPU_LINE_SYSTIMER, systimer_irq_handler, NULL);
+    intc_route_irq(RADIX_CORE_0, INT_SRC_SYSTIMER_TARGET0, INTC_CPU_LINE_SYSTIMER);
+
+    /* Enable routed Core 0 Level-1 interrupt lines before starting scheduler */
+    intc_enable_irq(INTC_CPU_LINE_IPI);
+    intc_enable_irq(INTC_CPU_LINE_SYSTIMER);
 
     /* Hand off execution to scheduler */
     sched_start();

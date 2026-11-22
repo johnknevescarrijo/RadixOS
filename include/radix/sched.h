@@ -22,6 +22,14 @@ void sched_yield(void);
 void sched_tick(void);
 tcb_t *sched_get_current_task(void);
 
+/* ISR nesting depth and deferred preemption control */
+void sched_enter_isr(void);
+void sched_exit_isr(void);
+bool sched_in_isr(void);
+void sched_set_need_resched(void);
+bool sched_need_resched(void);
+bool sched_consume_need_resched(void);
+
 /* Default task exit handler if a task function returns */
 #ifndef RADIX_HOST_TEST
 void task_exit(void) __attribute__((noreturn));
