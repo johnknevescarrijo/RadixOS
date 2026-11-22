@@ -131,8 +131,8 @@ static int cmd_info(int argc, char *argv[]) {
 static int cmd_ps(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
-    kprintf(SHELL_VT100_BOLD "\nID   NAME             PRIO   STATE        SLICE   STACK (HWM/SIZE)  CANARY\n" SHELL_VT100_RESET);
-    kprintf("-------------------------------------------------------------------------\n");
+    kprintf(SHELL_VT100_BOLD "\nID   NAME             PRIO/BASE AFF  STATE      SLICE  STACK (HWM/SIZE)  CANARY\n" SHELL_VT100_RESET);
+    kprintf("--------------------------------------------------------------------------------\n");
 
     for (uint32_t i = 0; i < MAX_TASKS; i++) {
         const tcb_t *t = sched_get_task_by_index(i);
@@ -146,11 +146,16 @@ static int cmd_ps(int argc, char *argv[]) {
                 case TASK_STATE_SUSPENDED: st = "SUSPENDED"; break;
                 default: break;
             }
+            const char *aff = "ANY";
+            if (t->core_affinity == (int8_t)RADIX_CORE_0) aff = "C0";
+            else if (t->core_affinity == (int8_t)RADIX_CORE_1) aff = "C1";
+
             size_t hwm = task_stack_high_water_mark(t);
             const char *canary_st = task_check_stack_canary(t) ? "OK" : "OVF";
-            kprintf("%u    %s\t\t%u      %s\t   %u     %u/%u\t    %s\n",
-                    (unsigned int)t->task_id, t->name, (unsigned int)t->priority,
-                    st, (unsigned int)t->slice_remaining,
+            kprintf("%u    %s\t\t%u/%u\t  %s  %s\t %u     %u/%u\t    %s\n",
+                    (unsigned int)t->task_id, t->name,
+                    (unsigned int)t->priority, (unsigned int)t->base_priority,
+                    aff, st, (unsigned int)t->slice_remaining,
                     (unsigned int)hwm, (unsigned int)t->stack_size, canary_st);
         }
     }
@@ -242,12 +247,14 @@ static int cmd_amp(int argc, char *argv[]) {
     else if (st->core_state[1] == CORE_STATE_BOOTING) core1_st = "BOOTING";
     else if (st->core_state[1] == CORE_STATE_HALTED) core1_st = "HALTED";
 
-    kprintf("  Core 0 (PRO_CPU): %s | Heartbeat: %u | IPI TX: %u | IPI RX: %u\n",
+    kprintf("  Core 0 (PRO_CPU): %s | Heartbeat: %u | IPI TX: %u | IPI RX: %u | CallQ: %u\n",
             core0_st, (unsigned int)st->core_heartbeats[0],
-            (unsigned int)st->ipi_tx_count[0], (unsigned int)st->ipi_rx_count[0]);
-    kprintf("  Core 1 (APP_CPU): %s | Heartbeat: %u | IPI TX: %u | IPI RX: %u\n",
+            (unsigned int)st->ipi_tx_count[0], (unsigned int)st->ipi_rx_count[0],
+            (unsigned int)st->call_queue[0].count);
+    kprintf("  Core 1 (APP_CPU): %s | Heartbeat: %u | IPI TX: %u | IPI RX: %u | CallQ: %u\n",
             core1_st, (unsigned int)st->core_heartbeats[1],
-            (unsigned int)st->ipi_tx_count[1], (unsigned int)st->ipi_rx_count[1]);
+            (unsigned int)st->ipi_tx_count[1], (unsigned int)st->ipi_rx_count[1],
+            (unsigned int)st->call_queue[1].count);
     return SHELL_OK;
 }
 

@@ -198,6 +198,7 @@ HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
                       kernel/kprintf.c \
                       drivers/world.c \
                       drivers/pms.c \
+                      drivers/intc.c \
                       drivers/system.c \
                       drivers/ipi.c \
                       drivers/uart.c \
@@ -217,6 +218,7 @@ HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
                               kernel/kprintf.c \
                               drivers/world.c \
                               drivers/pms.c \
+                              drivers/intc.c \
                               drivers/system.c \
                               drivers/ipi.c \
                               drivers/uart.c \
@@ -239,6 +241,7 @@ HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             kernel/kprintf.c \
                             drivers/world.c \
                             drivers/pms.c \
+                            drivers/intc.c \
                             drivers/system.c \
                             drivers/ipi.c \
                             drivers/uart.c \
@@ -312,6 +315,7 @@ HOST_TEST_WORLD_ISOLATION_SRCS := tests/test_world_isolation_host.c \
                                   kernel/kprintf.c \
                                   drivers/world.c \
                                   drivers/pms.c \
+                                  drivers/intc.c \
                                   drivers/system.c \
                                   drivers/ipi.c \
                                   drivers/uart.c \
@@ -334,6 +338,7 @@ HOST_TEST_MM_STACK_SRCS := tests/test_mm_stack_host.c \
                            kernel/kprintf.c \
                            drivers/world.c \
                            drivers/pms.c \
+                           drivers/intc.c \
                            drivers/system.c \
                            drivers/ipi.c \
                            drivers/uart.c \
@@ -356,6 +361,7 @@ HOST_TEST_KLOG_PANIC_SRCS := tests/test_klog_panic_host.c \
                              kernel/kprintf.c \
                              drivers/world.c \
                              drivers/pms.c \
+                             drivers/intc.c \
                              drivers/system.c \
                              drivers/ipi.c \
                              drivers/uart.c \

@@ -12,6 +12,10 @@ void host_set_current_core_id(uint32_t core_id) {
     s_host_core_id = core_id;
 }
 
+void arch_host_set_core_id(uint32_t core_id) {
+    host_set_current_core_id(core_id);
+}
+
 uint32_t arch_get_core_id(void) {
     return s_host_core_id;
 }

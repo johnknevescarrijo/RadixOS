@@ -12,9 +12,12 @@
 
 /* Scheduler Initialization and Life Cycle */
 void sched_init(void);
+void sched_reset_core_state(void);
 int  task_create(const char *name, task_entry_t entry, void *arg, uint32_t priority, void *stack_mem, uint32_t stack_size);
 int  task_create_in_world(const char *name, task_entry_t entry, void *arg, uint32_t priority,
                           void *stack_mem, uint32_t stack_size, world_id_t world);
+int  task_create_pinned(const char *name, task_entry_t entry, void *arg, uint32_t priority,
+                        void *stack_mem, uint32_t stack_size, world_id_t world, int8_t core_affinity);
 bool task_set_user_region(uint32_t task_id, void *base, size_t size);
 #ifndef RADIX_HOST_TEST
 void sched_start(void) __attribute__((noreturn));
@@ -27,6 +30,7 @@ void sched_yield(void);
 void sched_tick(void);
 uint64_t sched_get_ticks(void);
 tcb_t *sched_get_current_task(void);
+tcb_t *sched_get_current_task_on_core(uint32_t core_id);
 
 /* Timed Task Sleep */
 void task_sleep_ticks(uint64_t ticks);

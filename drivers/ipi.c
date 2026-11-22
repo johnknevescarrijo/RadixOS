@@ -118,15 +118,9 @@ uint32_t ipi_handle_irq(void) {
         arch_atomic_fetch_add(&st->resched_requests[core_id], 1);
     }
 
-    /* 2. Remote function call invocation */
+    /* 2. Remote function call invocation (drain protected queue) */
     if (reasons & IPI_REASON_CALL_FUNC) {
-        amp_call_slot_t *slot = &st->call_mailbox[core_id];
-        if (slot->fn != NULL) {
-            slot->fn(slot->arg);
-            arch_memory_barrier();
-            slot->done = 1;
-            arch_memory_barrier();
-        }
+        amp_drain_call_queue(core_id);
     }
 
     /* 3. IPC notify & Ping reasons returned to caller */
