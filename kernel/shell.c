@@ -7,6 +7,7 @@
 
 #include <radix/shell.h>
 #include <radix/hal.h>
+#include <radix/uart.h>
 #include <radix/kprintf.h>
 #include <radix/sched.h>
 #include <radix/pms.h>
@@ -365,8 +366,10 @@ void shell_poll_uart(void) {
 void shell_task(void *arg) {
     (void)arg;
     while (1) {
-        shell_poll_uart();
-        sched_yield();
+        int ch = uart_getc_blocking();
+        if (ch >= 0) {
+            shell_poll_char(ch);
+        }
     }
 }
 

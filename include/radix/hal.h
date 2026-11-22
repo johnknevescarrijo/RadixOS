@@ -2,6 +2,7 @@
 #define RADIX_HAL_H
 
 #include <radix/types.h>
+#include <radix/uart.h>
 
 /* Forward declaration */
 struct cpu_context;
@@ -9,11 +10,6 @@ struct cpu_context;
 /* Hardware Initialization & Control */
 void hal_early_init(void);
 void wdt_disable_all(void);
-
-/* Serial UART HAL */
-void uart_early_init(void);
-void uart_putc(char c);
-int  uart_getc_nonblock(void);
 
 /* Systimer HAL */
 void systimer_init(uint32_t tick_rate_hz);
