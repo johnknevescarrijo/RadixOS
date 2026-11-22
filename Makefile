@@ -20,6 +20,26 @@ SIZE    := $(CROSS_COMPILE)size
 
 HOST_CC ?= gcc
 PYTHON  ?= python3
+BUILD_DIR := build
+
+# Find RISC-V toolchain for ULP coprocessor (RV32IMC) if available
+RISCV_TOOLCHAIN_DIR ?= $(wildcard /home/john/.espressif/tools/riscv32-esp-elf/*/riscv32-esp-elf/bin)
+ifneq ($(RISCV_TOOLCHAIN_DIR),)
+    ULP_CC_AUTO := $(firstword $(RISCV_TOOLCHAIN_DIR))/riscv32-esp-elf-gcc
+else
+    ULP_CC_AUTO := $(shell command -v riscv32-esp-elf-gcc 2>/dev/null || command -v riscv32-unknown-elf-gcc 2>/dev/null || command -v riscv64-unknown-elf-gcc 2>/dev/null)
+endif
+ULP_CC      ?= $(ULP_CC_AUTO)
+ULP_OBJCOPY := $(patsubst %gcc,%objcopy,$(ULP_CC))
+ULP_CFLAGS  := -march=rv32imc -mabi=ilp32 -Os -ffreestanding -fno-builtin -nostdlib -nostartfiles -Wall -Wextra -Werror
+
+ifneq ($(strip $(ULP_CC)),)
+    ULP_FW_DEP   := $(BUILD_DIR)/ulp_fw_bin.h
+    ULP_FW_FLAGS := -I$(BUILD_DIR) -DRADIX_HAVE_ULP_FW_BIN_H
+else
+    ULP_FW_DEP   :=
+    ULP_FW_FLAGS :=
+endif
 
 # Optional flashing & emulation tools
 ESPTOOL ?= $(shell command -v esptool 2>/dev/null || command -v esptool.py 2>/dev/null || ls /home/john/.espressif/python_env/*/bin/esptool 2>/dev/null | head -n 1)
@@ -109,6 +129,24 @@ $(BUILD_DIR)/radixos.elf: $(OBJS) linker/esp32s3_ram.ld
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
 	@echo "[LD] $@"
+
+$(BUILD_DIR)/ulp_main.elf: ulp/ulp_main.c ulp/ulp.ld
+	@mkdir -p $(dir $@)
+	$(ULP_CC) $(ULP_CFLAGS) -T ulp/ulp.ld $< -o $@
+	@echo "[ULP_CC] $@"
+
+$(BUILD_DIR)/ulp_main.bin: $(BUILD_DIR)/ulp_main.elf
+	$(ULP_OBJCOPY) -O binary $< $@
+	@echo "[ULP_OBJCOPY] $@"
+
+$(BUILD_DIR)/ulp_fw_bin.h: $(BUILD_DIR)/ulp_main.bin tools/bin2c.py
+	$(PYTHON) tools/bin2c.py $< $@ --symbol g_ulp_default_rv32imc_fw --max-size 0x1F00
+
+$(BUILD_DIR)/drivers/ulp.o: drivers/ulp.c $(ULP_FW_DEP)
+	@mkdir -p $(dir $@)
+	$(if $(strip $(ULP_CC)),,@echo "[ULP] No RISC-V toolchain found; using pre-assembled RV32IMC fallback.")
+	$(CC) $(CFLAGS) $(ULP_FW_FLAGS) -c $< -o $@
+	@echo "[CC] $<"
 
 $(BUILD_DIR)/%.o: %.S
 	@mkdir -p $(dir $@)
@@ -228,7 +266,7 @@ HOST_TEST_TIMERS_UART_SRCS := tests/test_timers_uart_host.c \
                               drivers/wdt.c \
                               drivers/systimer.c
 
-host-check:
+host-check: $(ULP_FW_DEP)
 	@mkdir -p $(BUILD_DIR)
 	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SCHED_SRCS) -o $(HOST_TEST_SCHED_BIN)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_SCHED_BIN)"
@@ -246,7 +284,7 @@ host-check:
 	@echo "[HOST_CC] Compiled $(HOST_TEST_PMS_SYSCALL_BIN)"
 	@echo "Running RadixOS host simulation (Step 5 World Controller, PMS MPU & Syscalls)..."
 	@$(HOST_TEST_PMS_SYSCALL_BIN)
-	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SHELL_ULP_SRCS) -o $(HOST_TEST_SHELL_ULP_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(ULP_FW_FLAGS) $(INCLUDES) $(HOST_TEST_SHELL_ULP_SRCS) -o $(HOST_TEST_SHELL_ULP_BIN)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_SHELL_ULP_BIN)"
 	@echo "Running RadixOS host simulation (Step 6 Shell & RISC-V ULP Coprocessor)..."
 	@$(HOST_TEST_SHELL_ULP_BIN)
@@ -254,7 +292,7 @@ host-check:
 	@echo "[HOST_CC] Compiled $(HOST_TEST_INTC_BIN)"
 	@echo "Running RadixOS host simulation (Interrupt Matrix & Deferred Preemption)..."
 	@$(HOST_TEST_INTC_BIN)
-	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_TIMERS_UART_SRCS) -o $(HOST_TEST_TIMERS_UART_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(ULP_FW_FLAGS) $(INCLUDES) $(HOST_TEST_TIMERS_UART_SRCS) -o $(HOST_TEST_TIMERS_UART_BIN)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_TIMERS_UART_BIN)"
 	@echo "Running RadixOS host simulation (Timed Sleep, Software Timers & UART RX IRQ)..."
 	@$(HOST_TEST_TIMERS_UART_BIN)

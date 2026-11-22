@@ -13,25 +13,32 @@ MEMORY
 
 SECTIONS
 {
-    .text :
+    .text : ALIGN(4)
     {
         *(.entry)
         *(.text .text.*)
     } > rtc_slow_ram
 
-    .rodata :
+    .rodata : ALIGN(4)
     {
         *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
     } > rtc_slow_ram
 
-    .data :
+    .data : ALIGN(4)
     {
         *(.data .data.*)
+        *(.sdata .sdata.*)
     } > rtc_slow_ram
 
-    .bss (NOLOAD) :
+    _ulp_image_end = .;
+    ASSERT((_ulp_image_end - ORIGIN(rtc_slow_ram)) <= LENGTH(rtc_slow_ram),
+           "ULP firmware binary overlaps RTC mailbox at 0x50001F00")
+
+    .bss (NOLOAD) : ALIGN(4)
     {
         *(.bss .bss.*)
+        *(.sbss .sbss.*)
         *(COMMON)
     } > rtc_slow_ram
 
