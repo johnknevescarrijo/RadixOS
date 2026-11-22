@@ -162,9 +162,6 @@ void kernel_early_init(void) {
     world_init();
     pms_init();
 
-    /* Configure Region 2: User Task Memory Sandbox & Stacks */
-    pms_configure_region(2, 0x3FC98000, 0x20000, PMS_PERM_RWX, PMS_PERM_RWX);
-
     /* Initialize Interrupt Matrix and route Core 0 IPI & UART0 RX handlers */
     intc_init(RADIX_CORE_0);
     intc_register_handler(INTC_CPU_LINE_IPI, ipi_irq_handler, NULL);

@@ -13,6 +13,9 @@
 /* Scheduler Initialization and Life Cycle */
 void sched_init(void);
 int  task_create(const char *name, task_entry_t entry, void *arg, uint32_t priority, void *stack_mem, uint32_t stack_size);
+int  task_create_in_world(const char *name, task_entry_t entry, void *arg, uint32_t priority,
+                          void *stack_mem, uint32_t stack_size, world_id_t world);
+bool task_set_user_region(uint32_t task_id, void *base, size_t size);
 #ifndef RADIX_HOST_TEST
 void sched_start(void) __attribute__((noreturn));
 #else

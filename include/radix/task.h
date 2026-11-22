@@ -2,6 +2,7 @@
 #define RADIX_TASK_H
 
 #include <radix/types.h>
+#include <radix/world.h>
 
 #define TASK_NAME_MAX_LEN       16
 #define TASK_STACK_MIN_SIZE     1024
@@ -40,18 +41,29 @@ typedef struct cpu_context {
 /* Task function entry prototype */
 typedef void (*task_entry_t)(void *arg);
 
+/* Task PMS memory profile */
+typedef struct pms_task_profile {
+    uintptr_t stack_base;
+    size_t    stack_size;
+    uintptr_t user_data_base;
+    size_t    user_data_size;
+} pms_task_profile_t;
+
 /* Task Control Block (TCB) */
 typedef struct tcb {
-    uint32_t        task_id;
-    char            name[TASK_NAME_MAX_LEN];
-    uint32_t        priority;
-    task_state_t    state;
-    cpu_context_t  *sp;              /* Saved stack pointer pointing to cpu_context */
-    void           *stack_base;      /* Base of stack memory block */
-    uint32_t        stack_size;      /* Size of stack in bytes */
-    uint32_t        ticks_run;       /* Cumulative ticks spent running */
-    uint32_t        slice_remaining; /* Remaining ticks in current time slice */
-    uint64_t        wake_tick;       /* Absolute tick at which a sleeping task wakes */
+    uint32_t           task_id;
+    char               name[TASK_NAME_MAX_LEN];
+    uint32_t           priority;
+    task_state_t       state;
+    cpu_context_t     *sp;              /* Saved stack pointer pointing to cpu_context */
+    void              *stack_base;      /* Base of stack memory block */
+    uint32_t           stack_size;      /* Size of stack in bytes */
+    uint32_t           ticks_run;       /* Cumulative ticks spent running */
+    uint32_t           slice_remaining; /* Remaining ticks in current time slice */
+    uint64_t           wake_tick;       /* Absolute tick at which a sleeping task wakes */
+    world_id_t         world;           /* Execution World (WORLD_0 or WORLD_1) */
+    pms_task_profile_t pms;             /* Per-task PMS protection profile */
+    bool               started;         /* True once initial context dispatch has occurred */
 } tcb_t;
 
 #endif /* RADIX_TASK_H */

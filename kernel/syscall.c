@@ -12,6 +12,7 @@
 #include <radix/ipc.h>
 #include <radix/hal.h>
 #include <radix/kprintf.h>
+#include <xtensa_regs.h>
 
 static uint32_t s_total_syscalls = 0;
 
@@ -21,6 +22,7 @@ uint32_t syscall_get_total_count(void) {
 
 int32_t radix_syscall_dispatch(uint32_t syscall_id, uintptr_t arg1, uintptr_t arg2, uintptr_t arg3, uintptr_t arg4) {
     s_total_syscalls++;
+    tcb_t *curr = sched_get_current_task();
 
     switch ((syscall_id_t)syscall_id) {
     case SYS_YIELD:
@@ -41,7 +43,13 @@ int32_t radix_syscall_dispatch(uint32_t syscall_id, uintptr_t arg1, uintptr_t ar
             return RADIX_SYSCALL_ERR_INVAL;
         }
 
-        /* Enforce user read permission on source payload */
+        if (curr && curr->world == RADIX_WORLD_1_USER) {
+            if (!pms_check_access(RADIX_WORLD_1_USER, (uintptr_t)ch, sizeof(ipc_channel_t), PMS_PERM_RW)) {
+                return RADIX_SYSCALL_ERR_ACCESS;
+            }
+        }
+
+        /* Enforce user read permission on source payload against active task PMS */
         if (len > 0) {
             if (!pms_check_access(RADIX_WORLD_1_USER, (uintptr_t)payload, len, PMS_PERM_R)) {
                 return RADIX_SYSCALL_ERR_ACCESS;
@@ -62,7 +70,13 @@ int32_t radix_syscall_dispatch(uint32_t syscall_id, uintptr_t arg1, uintptr_t ar
             return RADIX_SYSCALL_ERR_INVAL;
         }
 
-        /* Enforce user write permissions on destination pointers */
+        if (curr && curr->world == RADIX_WORLD_1_USER) {
+            if (!pms_check_access(RADIX_WORLD_1_USER, (uintptr_t)ch, sizeof(ipc_channel_t), PMS_PERM_RW)) {
+                return RADIX_SYSCALL_ERR_ACCESS;
+            }
+        }
+
+        /* Enforce user write permissions on destination pointers against active task PMS */
         if (!pms_check_access(RADIX_WORLD_1_USER, (uintptr_t)msg_id_out, sizeof(uint32_t), PMS_PERM_W)) {
             return RADIX_SYSCALL_ERR_ACCESS;
         }
@@ -119,12 +133,34 @@ int32_t radix_syscall_dispatch(uint32_t syscall_id, uintptr_t arg1, uintptr_t ar
     }
 }
 
+static bool syscall_is_violation_cause(uint32_t exccause) {
+    return (exccause == EXCCAUSE_ILLEGAL_INSTRUCTION ||
+            exccause == EXCCAUSE_INSTR_FETCH_ERROR ||
+            exccause == EXCCAUSE_LOAD_STORE_ERROR ||
+            exccause == EXCCAUSE_PRIVILEGED ||
+            exccause == EXCCAUSE_LOAD_PROHIBITED ||
+            exccause == EXCCAUSE_STORE_PROHIBITED);
+}
+
 void radix_exception_handler_c(uint32_t exccause, uintptr_t epc1, uintptr_t excvaddr, uint32_t *regs) {
     (void)regs;
+    tcb_t *curr = sched_get_current_task();
+
+    if (curr && curr->world == RADIX_WORLD_1_USER) {
+        if (syscall_is_violation_cause(exccause)) {
+            pms_handle_violation_exception(exccause, excvaddr);
+            return;
+        }
+        kprintf("[USER-TRAP] Exception cause=%u in task '%s' (id=%u) at epc=0x%x, vaddr=0x%x -> terminating task\n",
+                (unsigned int)exccause, curr->name, (unsigned int)curr->task_id,
+                (unsigned int)epc1, (unsigned int)excvaddr);
+        task_exit();
+        return;
+    }
+
     kprintf("[KERNEL-TRAP] Exception cause=%u at epc=0x%x, vaddr=0x%x\n",
             (unsigned int)exccause, (unsigned int)epc1, (unsigned int)excvaddr);
-    tcb_t *curr = sched_get_current_task();
-    if (curr) {
+    if (curr && curr->task_id != 0u) {
         task_exit();
     }
 }
@@ -132,9 +168,13 @@ void radix_exception_handler_c(uint32_t exccause, uintptr_t epc1, uintptr_t excv
 /* User-Space Invocation Gate */
 static inline int32_t arch_invoke_syscall(uint32_t id, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4) {
 #if defined(RADIX_HOST_TEST)
-    world_enter_kernel_from_trap();
+    tcb_t *before = sched_get_current_task();
+    radix_world_t caller_world = world_capture_and_enter_kernel();
     int32_t ret = radix_syscall_dispatch(id, a1, a2, a3, a4);
-    world_switch_to_user(0);
+    tcb_t *after = sched_get_current_task();
+    if ((after == before || after == NULL) && caller_world == RADIX_WORLD_1_USER) {
+        world_switch_to_user(0);
+    }
     return ret;
 #else
     register uint32_t r_id __asm__("a2") = id;
