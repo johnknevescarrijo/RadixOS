@@ -128,6 +128,7 @@ static int cmd_ps(int argc, char *argv[]) {
                 case TASK_STATE_READY:     st = "READY"; break;
                 case TASK_STATE_RUNNING:   st = "RUNNING"; break;
                 case TASK_STATE_BLOCKED:   st = "BLOCKED"; break;
+                case TASK_STATE_SLEEPING:  st = "SLEEP"; break;
                 case TASK_STATE_SUSPENDED: st = "SUSPENDED"; break;
                 default: break;
             }
