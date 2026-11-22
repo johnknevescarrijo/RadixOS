@@ -19,6 +19,14 @@ OBJDUMP := $(CROSS_COMPILE)objdump
 SIZE    := $(CROSS_COMPILE)size
 
 HOST_CC ?= gcc
+PYTHON  ?= python3
+
+# Optional flashing & emulation tools
+ESPTOOL ?= $(shell command -v esptool 2>/dev/null || command -v esptool.py 2>/dev/null || ls /home/john/.espressif/python_env/*/bin/esptool 2>/dev/null | head -n 1)
+QEMU_XTENSA ?= $(shell command -v qemu-system-xtensa 2>/dev/null)
+ESP32S3_PORT ?= /dev/ttyUSB0
+ESP32S3_BAUD ?= 460800
+QEMU_MEM_ARGS ?= -nographic -machine esp32s3 -drive file=$(BUILD_DIR)/radixos_flash.bin,if=mtd,format=raw -serial mon:stdio
 
 # Directories
 BUILD_DIR := build
@@ -63,16 +71,39 @@ SRCS_C := kernel/main.c \
 OBJS := $(addprefix $(BUILD_DIR)/, $(SRCS_S:.S=.o) $(SRCS_C:.c=.o))
 
 # Targets
-.PHONY: all clean host-check
+.PHONY: all clean host-check flash-image qemu flash
 
 all: $(BUILD_DIR)/radixos.bin $(BUILD_DIR)/radixos.elf
 	@echo "=== RadixOS Build Complete ==="
 	@$(SIZE) $(BUILD_DIR)/radixos.elf
 
-$(BUILD_DIR)/radixos.bin: $(BUILD_DIR)/radixos.elf
+$(BUILD_DIR)/radixos.bin: $(BUILD_DIR)/radixos.elf tools/mk_esp32s3_image.py
 	@mkdir -p $(dir $@)
-	$(OBJCOPY) -O binary $< $@
-	@echo "[OBJCOPY] $@"
+	$(PYTHON) tools/mk_esp32s3_image.py $< $@
+
+$(BUILD_DIR)/radixos_flash.bin: $(BUILD_DIR)/radixos.elf tools/mk_esp32s3_image.py
+	@mkdir -p $(dir $@)
+	$(PYTHON) tools/mk_esp32s3_image.py $< $(BUILD_DIR)/radixos.bin --flash-image $@ --flash-size 4M
+
+flash-image: $(BUILD_DIR)/radixos_flash.bin
+
+qemu: $(BUILD_DIR)/radixos_flash.bin
+	@if [ -n "$(QEMU_XTENSA)" ]; then \
+		echo "[QEMU] Starting Espressif ESP32-S3 emulation (Ctrl-A X to exit)..."; \
+		$(QEMU_XTENSA) $(QEMU_MEM_ARGS); \
+	else \
+		echo "[QEMU] qemu-system-xtensa not found in PATH."; \
+		echo "       Install Espressif QEMU (qemu-system-xtensa) and run:"; \
+		echo "       qemu-system-xtensa $(QEMU_MEM_ARGS)"; \
+	fi
+
+flash: $(BUILD_DIR)/radixos.bin
+	@if [ -n "$(ESPTOOL)" ]; then \
+		$(ESPTOOL) --chip esp32s3 --port $(ESP32S3_PORT) --baud $(ESP32S3_BAUD) write-flash 0x0 $<; \
+	else \
+		echo "[FLASH] esptool not found. Install esptool and run:"; \
+		echo "        esptool --chip esp32s3 --port $(ESP32S3_PORT) --baud $(ESP32S3_BAUD) write-flash 0x0 $<"; \
+	fi
 
 $(BUILD_DIR)/radixos.elf: $(OBJS) linker/esp32s3_ram.ld
 	@mkdir -p $(dir $@)
