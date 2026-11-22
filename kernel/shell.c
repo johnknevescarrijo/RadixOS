@@ -9,6 +9,7 @@
 #include <radix/hal.h>
 #include <radix/uart.h>
 #include <radix/kprintf.h>
+#include <radix/klog.h>
 #include <radix/sched.h>
 #include <radix/pms.h>
 #include <radix/mm.h>
@@ -59,6 +60,7 @@ static int cmd_help(int argc, char *argv[]);
 static int cmd_info(int argc, char *argv[]);
 static int cmd_ps(int argc, char *argv[]);
 static int cmd_mem(int argc, char *argv[]);
+static int cmd_dmesg(int argc, char *argv[]);
 static int cmd_kill(int argc, char *argv[]);
 static int cmd_amp(int argc, char *argv[]);
 static int cmd_ulp(int argc, char *argv[]);
@@ -69,6 +71,7 @@ static const shell_cmd_t g_shell_cmds[] = {
     { "info",   "Show system, PMS, syscall and ULP info", cmd_info },
     { "ps",     "List all active kernel tasks",          cmd_ps },
     { "mem",    "Show heap memory stats & integrity",    cmd_mem },
+    { "dmesg",  "Show/clear kernel log: dmesg [-c|lvl]", cmd_dmesg },
     { "kill",   "Terminate a task: kill <id>",           cmd_kill },
     { "amp",    "Show dual-core AMP and IPI status",     cmd_amp },
     { "ulp",    "Inspect & control RISC-V ULP",          cmd_ulp },
@@ -175,6 +178,31 @@ static int cmd_mem(int argc, char *argv[]) {
             (unsigned int)stats.corrupt_frees);
     kprintf("  Integrity    : %s\n", integrity_ok ? "OK" : "FAIL");
     return SHELL_OK;
+}
+
+static int cmd_dmesg(int argc, char *argv[]) {
+    if (argc == 1) {
+        klog_dump_all();
+        return SHELL_OK;
+    }
+
+    if (argc == 2) {
+        if (shell_strcmp(argv[1], "-c") == 0) {
+            klog_dump_all();
+            klog_clear();
+            kprintf("Kernel log buffer cleared.\n");
+            return SHELL_OK;
+        }
+
+        klog_level_t min_level = KLOG_LEVEL_DEBUG;
+        if (klog_parse_level(argv[1], &min_level)) {
+            klog_dump_filtered(min_level);
+            return SHELL_OK;
+        }
+    }
+
+    kprintf(SHELL_VT100_RED "Usage: dmesg [-c | debug|info|warn|err|panic]\n" SHELL_VT100_RESET);
+    return SHELL_ERR_BAD_ARG;
 }
 
 static int cmd_kill(int argc, char *argv[]) {
