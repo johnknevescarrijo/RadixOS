@@ -50,6 +50,7 @@ SRCS_C := kernel/main.c \
           kernel/syscall.c \
           kernel/shell.c \
           drivers/system.c \
+          drivers/intc.c \
           drivers/ipi.c \
           drivers/world.c \
           drivers/pms.c \

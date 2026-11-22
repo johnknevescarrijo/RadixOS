@@ -16,7 +16,36 @@
 #define DR_REG_SYSTIMER_BASE         0x60023000
 #define DR_REG_SYSTEM_BASE           0x600C0000
 #define DR_REG_INTERRUPT_CORE0_BASE  0x600C2000
+#define DR_REG_INTERRUPT_CORE1_BASE  0x600C2800
 #define DR_REG_WORLD_CTRL_BASE       0x600D5000
+
+/*
+ * ESP32-S3 Interrupt Matrix Registers (TRM Chapter 8)
+ *
+ * Core 0 map block: 0x600C2000, Core 1 map block: 0x600C2800.
+ * Peripheral interrupt sources 0..98 (99 total) each occupy one 32-bit map
+ * register at (BASE + 4 * source_id).
+ * Writing INTERRUPT_MAP_DISCONNECTED (16, an internal Timer2 line unreachable
+ * from the matrix) detaches the peripheral source from all external CPU lines.
+ */
+#define ESP32S3_INTC_NUM_SOURCES        99u
+#define ESP32S3_INTC_NUM_CPU_INTS       32u
+#define INTERRUPT_MAP_DISCONNECTED      16u
+
+#define INTERRUPT_CORE0_MAP_REG(src)    (DR_REG_INTERRUPT_CORE0_BASE + ((src) * 4u))
+#define INTERRUPT_CORE1_MAP_REG(src)    (DR_REG_INTERRUPT_CORE1_BASE + ((src) * 4u))
+
+/*
+ * Verified ESP32-S3 TRM Table 8-1 Peripheral Interrupt Source IDs:
+ *   UART0_INTR             = 27 (offset 0x006C)
+ *   SYSTIMER_TARGET0_INTR  = 57 (offset 0x00E4)
+ *   CPU_INTR_FROM_CPU_0    = 79 (offset 0x013C)
+ *   CPU_INTR_FROM_CPU_1    = 80 (offset 0x0140)
+ */
+#define ESP32S3_INT_SRC_UART0               27u
+#define ESP32S3_INT_SRC_SYSTIMER_TARGET0    57u
+#define ESP32S3_INT_SRC_CPU_INTR_FROM_CPU_0 79u
+#define ESP32S3_INT_SRC_CPU_INTR_FROM_CPU_1 80u
 
 /*
  * UART0 Registers (Base: 0x60000000)
