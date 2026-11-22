@@ -7,6 +7,7 @@
 
 #include <radix/shell.h>
 #include <radix/hal.h>
+#include <radix/uart.h>
 #include <radix/kprintf.h>
 #include <radix/sched.h>
 #include <radix/pms.h>
@@ -128,6 +129,7 @@ static int cmd_ps(int argc, char *argv[]) {
                 case TASK_STATE_READY:     st = "READY"; break;
                 case TASK_STATE_RUNNING:   st = "RUNNING"; break;
                 case TASK_STATE_BLOCKED:   st = "BLOCKED"; break;
+                case TASK_STATE_SLEEPING:  st = "SLEEP"; break;
                 case TASK_STATE_SUSPENDED: st = "SUSPENDED"; break;
                 default: break;
             }
@@ -364,8 +366,10 @@ void shell_poll_uart(void) {
 void shell_task(void *arg) {
     (void)arg;
     while (1) {
-        shell_poll_uart();
-        sched_yield();
+        int ch = uart_getc_blocking();
+        if (ch >= 0) {
+            shell_poll_char(ch);
+        }
     }
 }
 

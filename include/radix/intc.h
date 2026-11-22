@@ -32,6 +32,7 @@ extern "C" {
 /* Default Level-1 CPU interrupt lines assigned by RadixOS */
 #define INTC_CPU_LINE_SYSTIMER          1u
 #define INTC_CPU_LINE_IPI               2u
+#define INTC_CPU_LINE_UART0             3u
 
 /* Interrupt service routine callback signature */
 typedef void (*radix_irq_handler_t)(uint32_t cpu_int_num, void *arg);

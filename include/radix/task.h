@@ -12,6 +12,7 @@ typedef enum {
     TASK_STATE_READY,
     TASK_STATE_RUNNING,
     TASK_STATE_BLOCKED,
+    TASK_STATE_SLEEPING,
     TASK_STATE_SUSPENDED
 } task_state_t;
 
@@ -50,6 +51,7 @@ typedef struct tcb {
     uint32_t        stack_size;      /* Size of stack in bytes */
     uint32_t        ticks_run;       /* Cumulative ticks spent running */
     uint32_t        slice_remaining; /* Remaining ticks in current time slice */
+    uint64_t        wake_tick;       /* Absolute tick at which a sleeping task wakes */
 } tcb_t;
 
 #endif /* RADIX_TASK_H */

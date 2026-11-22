@@ -57,6 +57,24 @@
 #define UART_CLKDIV_SYNC_REG(i)      ((i) + 0x0014)
 #define UART_STATUS_REG(i)           ((i) + 0x001C)
 #define UART_CONF0_SYNC_REG(i)       ((i) + 0x0020)
+#define UART_CONF1_REG(i)            ((i) + 0x0024)
+#define UART_ID_REG(i)               ((i) + 0x0080)
+
+/* UART_INT_ST_REG / UART_INT_ENA_REG / UART_INT_CLR_REG Bitfields */
+#define UART_RXFIFO_FULL_INT_ST      BIT(0)
+#define UART_RXFIFO_TOUT_INT_ST      BIT(8)
+#define UART_RXFIFO_FULL_INT_ENA     BIT(0)
+#define UART_RXFIFO_TOUT_INT_ENA     BIT(8)
+#define UART_RXFIFO_FULL_INT_CLR     BIT(0)
+#define UART_RXFIFO_TOUT_INT_CLR     BIT(8)
+
+/* UART_CONF1_REG Bitfields */
+#define UART_RXFIFO_FULL_THRHD_MASK  0x000003FFU
+#define UART_RXFIFO_FULL_THRHD_SHIFT 0
+#define UART_RX_TOUT_EN              BIT(23)
+
+/* UART_ID_REG Bitfields */
+#define UART_REG_UPDATE              BIT(31)
 
 /* UART_STATUS_REG Bitfields */
 #define UART_TXFIFO_CNT_MASK         0x000003FF

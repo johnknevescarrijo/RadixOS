@@ -283,11 +283,26 @@ void sem_post(semaphore_t *sem) {
     }
 
     tcb_t *waiter = sem_dequeue(sem);
+    tcb_t *curr = sched_get_current_task();
+    bool in_isr = sched_in_isr();
+    bool preempt = false;
+
     if (waiter) {
         sched_unblock(waiter);
+        if (!curr || waiter->priority > curr->priority) {
+            preempt = true;
+        }
     }
 
     spinlock_release_irqrestore(&sem->lock, flags);
+
+    if (preempt) {
+        if (in_isr) {
+            sched_set_need_resched();
+        } else {
+            sched_yield();
+        }
+    }
 }
 
 uint32_t sem_get_count(const semaphore_t *sem) {

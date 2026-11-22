@@ -1,5 +1,7 @@
 #include <radix/sched.h>
+#include <radix/timer.h>
 #include <radix/hal.h>
+#include <radix/atomic.h>
 #include <radix/kprintf.h>
 
 static tcb_t s_tasks[MAX_TASKS];
@@ -7,6 +9,7 @@ static int   s_current_task_idx = -1;
 static uint32_t s_next_task_id = 1;
 static volatile uint32_t s_isr_depth = 0;
 static volatile bool s_need_resched = false;
+static volatile uint64_t s_total_ticks = 0;
 
 static uint8_t s_idle_stack[IDLE_TASK_STACK_SIZE] __attribute__((aligned(16)));
 
@@ -42,11 +45,14 @@ void sched_init(void) {
         s_tasks[i].state = TASK_STATE_UNUSED;
         s_tasks[i].task_id = 0;
         s_tasks[i].ticks_run = 0;
+        s_tasks[i].wake_tick = 0;
     }
     s_current_task_idx = -1;
     s_next_task_id = 1;
     s_isr_depth = 0;
     s_need_resched = false;
+    s_total_ticks = 0;
+    ktimer_reset_all();
 
     /* Create the idle task at lowest priority 0 */
     int idle_id = task_create("idle_task", idle_task_entry, NULL, 0,
@@ -82,6 +88,7 @@ int task_create(const char *name, task_entry_t entry, void *arg, uint32_t priori
     task->stack_size = stack_size;
     task->ticks_run = 0;
     task->slice_remaining = DEFAULT_TIME_SLICE_TICKS;
+    task->wake_tick = 0;
 
     /* Copy name safely */
     size_t n = 0;
@@ -236,22 +243,87 @@ void sched_yield(void) {
     }
 }
 
-void sched_tick(void) {
-    if (s_current_task_idx < 0) {
+uint64_t sched_get_ticks(void) {
+    uint32_t flags = arch_irq_save();
+    uint64_t ticks = s_total_ticks;
+    arch_irq_restore(flags);
+    return ticks;
+}
+
+void task_sleep_ticks(uint64_t ticks) {
+    if (ticks == 0u) {
+        if (!sched_in_isr()) {
+            sched_yield();
+        }
         return;
     }
 
-    tcb_t *curr = &s_tasks[s_current_task_idx];
-    curr->ticks_run++;
-
-    if (curr->slice_remaining > 0) {
-        curr->slice_remaining--;
+    uint32_t flags = arch_irq_save();
+    tcb_t *curr = sched_get_current_task();
+    if (!curr || curr->task_id == 0u || sched_in_isr()) {
+        arch_irq_restore(flags);
+        return;
     }
 
-    if (curr->slice_remaining == 0) {
+    curr->wake_tick = s_total_ticks + ticks;
+    curr->state = TASK_STATE_SLEEPING;
+    arch_irq_restore(flags);
+
+    sched_yield();
+}
+
+void task_sleep_ms(uint32_t ms) {
+    if (ms == 0u) {
+        if (!sched_in_isr()) {
+            sched_yield();
+        }
+        return;
+    }
+
+    uint64_t ticks = ((uint64_t)ms + RADIX_TICK_MS - 1u) / RADIX_TICK_MS;
+    if (ticks == 0u) {
+        ticks = 1u;
+    }
+    task_sleep_ticks(ticks);
+}
+
+void sched_tick(void) {
+    uint32_t flags = arch_irq_save();
+    s_total_ticks++;
+    uint64_t now = s_total_ticks;
+
+    tcb_t *curr = (s_current_task_idx >= 0) ? &s_tasks[s_current_task_idx] : NULL;
+    bool woke_higher_prio = false;
+
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (s_tasks[i].state == TASK_STATE_SLEEPING && s_tasks[i].wake_tick <= now) {
+            s_tasks[i].state = TASK_STATE_READY;
+            if (curr && s_tasks[i].priority > curr->priority) {
+                woke_higher_prio = true;
+            }
+        }
+    }
+
+    bool need_resched = woke_higher_prio;
+    if (curr) {
+        curr->ticks_run++;
+
+        if (curr->slice_remaining > 0) {
+            curr->slice_remaining--;
+        }
+        if (curr->slice_remaining == 0) {
+            need_resched = true;
+        }
+    }
+
+    arch_irq_restore(flags);
+
+    ktimer_tick(now);
+
+    if (need_resched) {
         if (sched_in_isr()) {
             sched_set_need_resched();
-        } else {
+        } else if (curr) {
             sched_yield();
         }
     }

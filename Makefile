@@ -44,6 +44,7 @@ SRCS_S := arch/xtensa/boot.S \
 SRCS_C := kernel/main.c \
           kernel/kprintf.c \
           kernel/sched.c \
+          kernel/timer.c \
           kernel/sync.c \
           kernel/ipc.c \
           kernel/amp.c \
@@ -92,6 +93,7 @@ $(BUILD_DIR)/%.o: %.c
 HOST_TEST_SCHED_BIN := $(BUILD_DIR)/test_sched_host
 HOST_TEST_SCHED_SRCS := tests/test_sched_host.c \
                         kernel/sched.c \
+                        kernel/timer.c \
                         kernel/sync.c \
                         kernel/ipc.c \
                         kernel/kprintf.c \
@@ -102,6 +104,7 @@ HOST_TEST_SCHED_SRCS := tests/test_sched_host.c \
 HOST_TEST_SYNC_IPC_BIN := $(BUILD_DIR)/test_sync_ipc_host
 HOST_TEST_SYNC_IPC_SRCS := tests/test_sync_ipc_host.c \
                            kernel/sched.c \
+                           kernel/timer.c \
                            kernel/sync.c \
                            kernel/ipc.c \
                            kernel/kprintf.c \
@@ -115,6 +118,7 @@ HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
                       kernel/ipc.c \
                       kernel/sync.c \
                       kernel/sched.c \
+                      kernel/timer.c \
                       kernel/kprintf.c \
                       drivers/system.c \
                       drivers/ipi.c \
@@ -127,6 +131,7 @@ HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
                               kernel/amp.c \
                               kernel/syscall.c \
                               kernel/sched.c \
+                              kernel/timer.c \
                               kernel/ipc.c \
                               kernel/sync.c \
                               kernel/kprintf.c \
@@ -145,6 +150,7 @@ HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             kernel/amp.c \
                             kernel/syscall.c \
                             kernel/sched.c \
+                            kernel/timer.c \
                             kernel/ipc.c \
                             kernel/sync.c \
                             kernel/kprintf.c \
@@ -163,12 +169,33 @@ HOST_TEST_INTC_SRCS := tests/test_intc_host.c \
                        drivers/ipi.c \
                        kernel/amp.c \
                        kernel/sched.c \
+                       kernel/timer.c \
                        kernel/ipc.c \
                        kernel/sync.c \
                        kernel/kprintf.c \
                        drivers/uart.c \
                        drivers/wdt.c \
                        drivers/systimer.c
+
+HOST_TEST_TIMERS_UART_BIN := $(BUILD_DIR)/test_timers_uart_host
+HOST_TEST_TIMERS_UART_SRCS := tests/test_timers_uart_host.c \
+                              kernel/shell.c \
+                              drivers/ulp.c \
+                              drivers/intc.c \
+                              drivers/system.c \
+                              drivers/ipi.c \
+                              kernel/amp.c \
+                              kernel/syscall.c \
+                              kernel/sched.c \
+                              kernel/timer.c \
+                              kernel/ipc.c \
+                              kernel/sync.c \
+                              kernel/kprintf.c \
+                              drivers/world.c \
+                              drivers/pms.c \
+                              drivers/uart.c \
+                              drivers/wdt.c \
+                              drivers/systimer.c
 
 host-check:
 	@mkdir -p $(BUILD_DIR)
@@ -196,6 +223,10 @@ host-check:
 	@echo "[HOST_CC] Compiled $(HOST_TEST_INTC_BIN)"
 	@echo "Running RadixOS host simulation (Interrupt Matrix & Deferred Preemption)..."
 	@$(HOST_TEST_INTC_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_TIMERS_UART_SRCS) -o $(HOST_TEST_TIMERS_UART_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_TIMERS_UART_BIN)"
+	@echo "Running RadixOS host simulation (Timed Sleep, Software Timers & UART RX IRQ)..."
+	@$(HOST_TEST_TIMERS_UART_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)

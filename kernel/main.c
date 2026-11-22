@@ -1,7 +1,9 @@
 #include <radix/types.h>
 #include <radix/hal.h>
+#include <radix/uart.h>
 #include <radix/kprintf.h>
 #include <radix/sched.h>
+#include <radix/timer.h>
 #include <radix/sync.h>
 #include <radix/ipc.h>
 #include <radix/amp.h>
@@ -90,8 +92,7 @@ static void heartbeat_task(void *arg) {
 
         count++;
 
-        for (volatile int i = 0; i < 500000; i++) {}
-        sched_yield();
+        task_sleep_ms(500);
     }
 }
 
@@ -131,8 +132,7 @@ static void worker_task(void *arg) {
 
         iteration++;
 
-        for (volatile int i = 0; i < 800000; i++) {}
-        sched_yield();
+        task_sleep_ms(800);
     }
 }
 
@@ -165,10 +165,13 @@ void kernel_early_init(void) {
     /* Configure Region 2: User Task Memory Sandbox & Stacks */
     pms_configure_region(2, 0x3FC98000, 0x20000, PMS_PERM_RWX, PMS_PERM_RWX);
 
-    /* Initialize Interrupt Matrix and route Core 0 IPI handler */
+    /* Initialize Interrupt Matrix and route Core 0 IPI & UART0 RX handlers */
     intc_init(RADIX_CORE_0);
     intc_register_handler(INTC_CPU_LINE_IPI, ipi_irq_handler, NULL);
     intc_route_irq(RADIX_CORE_0, INT_SRC_CPU_INTR_FROM_CPU_0, INTC_CPU_LINE_IPI);
+    intc_register_handler(INTC_CPU_LINE_UART0, uart_isr, NULL);
+    intc_route_irq(RADIX_CORE_0, INT_SRC_UART0, INTC_CPU_LINE_UART0);
+    uart_rx_irq_enable();
 
     /* Initialize Asymmetric Multiprocessing (AMP) and Core 1 bring-up */
     amp_init();
@@ -203,6 +206,7 @@ void kernel_early_init(void) {
     /* Enable routed Core 0 Level-1 interrupt lines before starting scheduler */
     intc_enable_irq(INTC_CPU_LINE_IPI);
     intc_enable_irq(INTC_CPU_LINE_SYSTIMER);
+    intc_enable_irq(INTC_CPU_LINE_UART0);
 
     /* Hand off execution to scheduler */
     sched_start();
