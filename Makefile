@@ -71,6 +71,7 @@ SRCS_S := arch/xtensa/boot.S \
 
 SRCS_C := kernel/main.c \
           kernel/kprintf.c \
+          kernel/mm.c \
           kernel/sched.c \
           kernel/timer.c \
           kernel/sync.c \

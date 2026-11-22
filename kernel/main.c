@@ -9,6 +9,7 @@
 #include <radix/amp.h>
 #include <radix/intc.h>
 #include <radix/pms.h>
+#include <radix/mm.h>
 #include <radix/syscall.h>
 #include <radix/ulp.h>
 #include <radix/shell.h>
@@ -161,6 +162,9 @@ void kernel_early_init(void) {
     /* Initialize World Controller & PMS memory protection */
     world_init();
     pms_init();
+
+    /* Initialize deterministic kernel heap allocator */
+    mm_init_default();
 
     /* Initialize Interrupt Matrix and route Core 0 IPI & UART0 RX handlers */
     intc_init(RADIX_CORE_0);
