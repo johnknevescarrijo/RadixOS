@@ -166,6 +166,8 @@ HOST_TEST_SCHED_SRCS := tests/test_sched_host.c \
                         kernel/sync.c \
                         kernel/ipc.c \
                         kernel/kprintf.c \
+                        drivers/world.c \
+                        drivers/pms.c \
                         drivers/uart.c \
                         drivers/wdt.c \
                         drivers/systimer.c
@@ -177,6 +179,8 @@ HOST_TEST_SYNC_IPC_SRCS := tests/test_sync_ipc_host.c \
                            kernel/sync.c \
                            kernel/ipc.c \
                            kernel/kprintf.c \
+                           drivers/world.c \
+                           drivers/pms.c \
                            drivers/uart.c \
                            drivers/wdt.c \
                            drivers/systimer.c
@@ -189,6 +193,8 @@ HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
                       kernel/sched.c \
                       kernel/timer.c \
                       kernel/kprintf.c \
+                      drivers/world.c \
+                      drivers/pms.c \
                       drivers/system.c \
                       drivers/ipi.c \
                       drivers/uart.c \
@@ -242,6 +248,8 @@ HOST_TEST_INTC_SRCS := tests/test_intc_host.c \
                        kernel/ipc.c \
                        kernel/sync.c \
                        kernel/kprintf.c \
+                       drivers/world.c \
+                       drivers/pms.c \
                        drivers/uart.c \
                        drivers/wdt.c \
                        drivers/systimer.c
@@ -274,6 +282,8 @@ HOST_TEST_BUILD_ULP_SRCS := tests/test_build_ulp_host.c \
                             kernel/sync.c \
                             kernel/ipc.c \
                             kernel/kprintf.c \
+                            drivers/world.c \
+                            drivers/pms.c \
                             drivers/uart.c \
                             drivers/wdt.c \
                             drivers/systimer.c

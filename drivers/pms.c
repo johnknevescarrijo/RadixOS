@@ -289,6 +289,36 @@ void pms_apply_task_region(uintptr_t stack_base, size_t stack_size, uintptr_t ex
     pms_sync_hardware();
 }
 
+void pms_apply_task_isolation(const struct tcb *task) {
+    if (!task) {
+        s_pms_regions[PMS_REGION_TASK_STACK].active = false;
+        s_pms_regions[PMS_REGION_TASK_EXTRA].active = false;
+        pms_sync_hardware();
+        return;
+    }
+
+    if (task->world == RADIX_WORLD_1_USER) {
+        pms_apply_task_region(task->pms.stack_base, task->pms.stack_size,
+                              task->pms.user_data_base, task->pms.user_data_size);
+        return;
+    }
+
+    /* World 0 kernel task: protect its stack from World 1 access */
+    if (task->pms.stack_base != 0u && task->pms.stack_size > 0u) {
+        s_pms_regions[PMS_REGION_TASK_STACK].region_id = PMS_REGION_TASK_STACK;
+        s_pms_regions[PMS_REGION_TASK_STACK].base_addr = task->pms.stack_base;
+        s_pms_regions[PMS_REGION_TASK_STACK].size = task->pms.stack_size;
+        s_pms_regions[PMS_REGION_TASK_STACK].world0_perm = PMS_PERM_RW;
+        s_pms_regions[PMS_REGION_TASK_STACK].world1_perm = PMS_PERM_NONE;
+        s_pms_regions[PMS_REGION_TASK_STACK].active = true;
+    } else {
+        s_pms_regions[PMS_REGION_TASK_STACK].active = false;
+    }
+
+    s_pms_regions[PMS_REGION_TASK_EXTRA].active = false;
+    pms_sync_hardware();
+}
+
 bool pms_check_access(radix_world_t world, uintptr_t addr, size_t len, uint32_t req_perm) {
     if (len == 0 || req_perm == PMS_PERM_NONE) {
         return true;

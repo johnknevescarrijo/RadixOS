@@ -75,6 +75,7 @@ bool pms_configure_region(uint32_t region_id, uintptr_t base_addr, size_t size, 
 void pms_clear_region(uint32_t region_id);
 bool pms_check_access(radix_world_t world, uintptr_t addr, size_t len, uint32_t req_perm);
 void pms_apply_task_region(uintptr_t stack_base, size_t stack_size, uintptr_t extra_base, size_t extra_size);
+void pms_apply_task_isolation(const struct tcb *task);
 void pms_sync_hardware(void);
 const pms_hw_regs_t *pms_get_hw_regs(void);
 void pms_handle_violation_exception(uint32_t exccause, uintptr_t excvaddr);

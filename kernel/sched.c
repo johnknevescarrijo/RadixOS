@@ -3,6 +3,8 @@
 #include <radix/hal.h>
 #include <radix/atomic.h>
 #include <radix/kprintf.h>
+#include <radix/pms.h>
+#include <xtensa_regs.h>
 
 static tcb_t s_tasks[MAX_TASKS];
 static int   s_current_task_idx = -1;
@@ -46,6 +48,12 @@ void sched_init(void) {
         s_tasks[i].task_id = 0;
         s_tasks[i].ticks_run = 0;
         s_tasks[i].wake_tick = 0;
+        s_tasks[i].world = WORLD_0;
+        s_tasks[i].started = false;
+        s_tasks[i].pms.stack_base = 0;
+        s_tasks[i].pms.stack_size = 0;
+        s_tasks[i].pms.user_data_base = 0;
+        s_tasks[i].pms.user_data_size = 0;
     }
     s_current_task_idx = -1;
     s_next_task_id = 1;
@@ -62,8 +70,8 @@ void sched_init(void) {
     kprintf("[SCHED] Initialized pre-emptive nano-kernel scheduler (Max Tasks: %d)\n", MAX_TASKS);
 }
 
-int task_create(const char *name, task_entry_t entry, void *arg, uint32_t priority,
-                void *stack_mem, uint32_t stack_size) {
+int task_create_in_world(const char *name, task_entry_t entry, void *arg, uint32_t priority,
+                         void *stack_mem, uint32_t stack_size, world_id_t world) {
     if (!name || !entry || !stack_mem || stack_size < sizeof(cpu_context_t) + 64) {
         return -1;
     }
@@ -89,6 +97,12 @@ int task_create(const char *name, task_entry_t entry, void *arg, uint32_t priori
     task->ticks_run = 0;
     task->slice_remaining = DEFAULT_TIME_SLICE_TICKS;
     task->wake_tick = 0;
+    task->world = (world == WORLD_1) ? WORLD_1 : WORLD_0;
+    task->started = false;
+    task->pms.stack_base = (uintptr_t)stack_mem;
+    task->pms.stack_size = (size_t)stack_size;
+    task->pms.user_data_base = 0;
+    task->pms.user_data_size = 0;
 
     /* Copy name safely */
     size_t n = 0;
@@ -104,7 +118,8 @@ int task_create(const char *name, task_entry_t entry, void *arg, uint32_t priori
 
     /* Initialize context fields */
     ctx->pc = (uint32_t)(uintptr_t)entry;
-    ctx->ps = 0x00000000;               /* Call0 ABI: ring 0, interrupts enabled */
+    /* Call0 ABI: WOE=0, INTLEVEL=0; PS.UM=1 for World 1 tasks to route traps via _user_exception_vector */
+    ctx->ps = (task->world == WORLD_1) ? PS_UM : 0x00000000u;
     ctx->a0 = (uint32_t)(uintptr_t)task_exit; /* Return hook */
     ctx->a2 = (uint32_t)(uintptr_t)arg;       /* First function parameter */
     ctx->a3 = 0;
@@ -123,11 +138,30 @@ int task_create(const char *name, task_entry_t entry, void *arg, uint32_t priori
 
     task->sp = ctx;
 
-    kprintf("[TASK] Created task '%s' (id=%u, prio=%u, sp=%p, stack=%u B)\n",
+    kprintf("[TASK] Created task '%s' (id=%u, prio=%u, world=%u, sp=%p, stack=%u B)\n",
             task->name, (unsigned int)task->task_id, (unsigned int)task->priority,
-            (void *)task->sp, (unsigned int)task->stack_size);
+            (unsigned int)task->world, (void *)task->sp, (unsigned int)task->stack_size);
 
     return (int)task->task_id;
+}
+
+int task_create(const char *name, task_entry_t entry, void *arg, uint32_t priority,
+                void *stack_mem, uint32_t stack_size) {
+    return task_create_in_world(name, entry, arg, priority, stack_mem, stack_size, WORLD_0);
+}
+
+bool task_set_user_region(uint32_t task_id, void *base, size_t size) {
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (s_tasks[i].state != TASK_STATE_UNUSED && s_tasks[i].task_id == task_id) {
+            s_tasks[i].pms.user_data_base = (uintptr_t)base;
+            s_tasks[i].pms.user_data_size = size;
+            if (i == s_current_task_idx) {
+                pms_apply_task_isolation(&s_tasks[i]);
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 static int sched_select_next_task(void) {
@@ -236,6 +270,30 @@ void sched_yield(void) {
     next_task->slice_remaining = DEFAULT_TIME_SLICE_TICKS;
     s_current_task_idx = next_idx;
 
+    /* Apply per-task PMS isolation and update active World domain */
+    pms_apply_task_isolation(next_task);
+
+#ifdef RADIX_HOST_TEST
+    next_task->started = true;
+    if (next_task->world == WORLD_1) {
+        world_switch_to_user((uintptr_t)next_task->sp->pc);
+    } else {
+        world_set_current(WORLD_0);
+    }
+#else
+    if (!next_task->started) {
+        next_task->started = true;
+        if (next_task->world == WORLD_1) {
+            world_switch_to_user((uintptr_t)next_task->sp->pc);
+        } else {
+            world_set_current(WORLD_0);
+        }
+    } else {
+        /* Resumed task wakes in kernel trap/ISR frame; RFE restores its World */
+        world_set_current(WORLD_0);
+    }
+#endif
+
     if (prev_task) {
         arch_context_switch(&prev_task->sp, next_task->sp);
     } else {
@@ -335,6 +393,14 @@ void sched_start(void) {
     s_current_task_idx = first_idx;
     s_tasks[first_idx].state = TASK_STATE_RUNNING;
     s_tasks[first_idx].slice_remaining = DEFAULT_TIME_SLICE_TICKS;
+    s_tasks[first_idx].started = true;
+
+    pms_apply_task_isolation(&s_tasks[first_idx]);
+    if (s_tasks[first_idx].world == WORLD_1) {
+        world_switch_to_user((uintptr_t)s_tasks[first_idx].sp->pc);
+    } else {
+        world_set_current(WORLD_0);
+    }
 
     kprintf("[SCHED] Dispatched initial task '%s' (id=%u)\n",
             s_tasks[first_idx].name, (unsigned int)s_tasks[first_idx].task_id);

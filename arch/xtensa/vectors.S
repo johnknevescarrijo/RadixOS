@@ -49,6 +49,7 @@ _kernel_exception_vector:
     .fill   (0x340 - (. - _vector_table)), 1, 0
 
     /* Offset 0x340: User Exception / Syscall & Level 1 Interrupt Vector (PS.UM = 1) */
+    .global _user_exception_vector
 _user_exception_vector:
     j       _user_exception_handler
     .fill   (0x3C0 - (. - _vector_table)), 1, 0
