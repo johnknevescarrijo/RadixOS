@@ -12,6 +12,7 @@ static uint32_t s_next_task_id = 1;
 static volatile uint32_t s_isr_depth = 0;
 static volatile bool s_need_resched = false;
 static volatile uint64_t s_total_ticks = 0;
+static uint32_t s_stack_overflow_count = 0;
 
 static uint8_t s_idle_stack[IDLE_TASK_STACK_SIZE] __attribute__((aligned(16)));
 
@@ -60,6 +61,7 @@ void sched_init(void) {
     s_isr_depth = 0;
     s_need_resched = false;
     s_total_ticks = 0;
+    s_stack_overflow_count = 0;
     ktimer_reset_all();
 
     /* Create the idle task at lowest priority 0 */
@@ -111,6 +113,15 @@ int task_create_in_world(const char *name, task_entry_t entry, void *arg, uint32
         n++;
     }
     task->name[n] = '\0';
+
+    /* Paint stack free area and place bottom 16-byte canary guard */
+    uint8_t *stack_bytes = (uint8_t *)stack_mem;
+    for (uint32_t i = 0; i < stack_size; i++) {
+        stack_bytes[i] = TASK_STACK_PAINT_BYTE;
+    }
+    for (uint32_t i = 0; i < TASK_STACK_CANARY_SIZE; i++) {
+        stack_bytes[i] = (uint8_t)(TASK_STACK_CANARY_MAGIC >> ((i & 3u) * 8u));
+    }
 
     /* Prepare initial stack frame */
     uintptr_t stack_top = ((uintptr_t)stack_mem + stack_size) & ~15UL;
@@ -248,6 +259,22 @@ bool sched_consume_need_resched(void) {
 }
 
 void sched_yield(void) {
+    int prev_idx = s_current_task_idx;
+    tcb_t *prev_task = (prev_idx >= 0) ? &s_tasks[prev_idx] : NULL;
+
+    if (prev_task &&
+        prev_task->state != TASK_STATE_UNUSED &&
+        prev_task->state != TASK_STATE_SUSPENDED) {
+        if (!task_check_stack_canary(prev_task)) {
+            s_stack_overflow_count++;
+            kprintf("[SCHED] ERROR: Stack canary corrupted in task '%s' (id=%u)!\n",
+                    prev_task->name, (unsigned int)prev_task->task_id);
+            if (prev_task->task_id != 0u) {
+                prev_task->state = TASK_STATE_SUSPENDED;
+            }
+        }
+    }
+
     int next_idx = sched_select_next_task();
 
     if (next_idx == s_current_task_idx && s_tasks[next_idx].state == TASK_STATE_RUNNING) {
@@ -258,8 +285,6 @@ void sched_yield(void) {
         return;
     }
 
-    int prev_idx = s_current_task_idx;
-    tcb_t *prev_task = (prev_idx >= 0) ? &s_tasks[prev_idx] : NULL;
     tcb_t *next_task = &s_tasks[next_idx];
 
     if (prev_task && prev_task->state == TASK_STATE_RUNNING) {
@@ -459,4 +484,57 @@ bool sched_kill_task(uint32_t task_id) {
         }
     }
     return false;
+}
+
+bool task_check_stack_canary(const tcb_t *task) {
+    if (!task || !task->stack_base || task->stack_size < TASK_STACK_CANARY_SIZE) {
+        return false;
+    }
+
+    const uint8_t *stack_bytes = (const uint8_t *)task->stack_base;
+    for (uint32_t i = 0; i < TASK_STACK_CANARY_SIZE; i++) {
+        uint8_t expected = (uint8_t)(TASK_STACK_CANARY_MAGIC >> ((i & 3u) * 8u));
+        if (stack_bytes[i] != expected) {
+            return false;
+        }
+    }
+    return true;
+}
+
+size_t task_stack_free_min_bytes(const tcb_t *task) {
+    if (!task || !task->stack_base || task->stack_size <= TASK_STACK_CANARY_SIZE) {
+        return 0u;
+    }
+
+    const uint8_t *stack_bytes = (const uint8_t *)task->stack_base;
+    size_t i = TASK_STACK_CANARY_SIZE;
+    while (i < (size_t)task->stack_size && stack_bytes[i] == TASK_STACK_PAINT_BYTE) {
+        i++;
+    }
+    return (i - TASK_STACK_CANARY_SIZE);
+}
+
+size_t task_stack_high_water_mark(const tcb_t *task) {
+    if (!task || !task->stack_base || task->stack_size <= TASK_STACK_CANARY_SIZE) {
+        return 0u;
+    }
+
+    size_t free_min = task_stack_free_min_bytes(task);
+    return (size_t)task->stack_size - free_min;
+}
+
+uint32_t sched_check_all_stacks(void) {
+    uint32_t corrupted = 0u;
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (s_tasks[i].state != TASK_STATE_UNUSED) {
+            if (!task_check_stack_canary(&s_tasks[i])) {
+                corrupted++;
+            }
+        }
+    }
+    return corrupted;
+}
+
+uint32_t sched_get_stack_overflow_count(void) {
+    return s_stack_overflow_count;
 }

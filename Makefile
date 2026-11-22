@@ -71,6 +71,7 @@ SRCS_S := arch/xtensa/boot.S \
 
 SRCS_C := kernel/main.c \
           kernel/kprintf.c \
+          kernel/mm.c \
           kernel/sched.c \
           kernel/timer.c \
           kernel/sync.c \
@@ -221,6 +222,7 @@ HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
 HOST_TEST_SHELL_ULP_BIN := $(BUILD_DIR)/test_shell_ulp_host
 HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             kernel/shell.c \
+                            kernel/mm.c \
                             drivers/ulp.c \
                             kernel/amp.c \
                             kernel/syscall.c \
@@ -257,6 +259,7 @@ HOST_TEST_INTC_SRCS := tests/test_intc_host.c \
 HOST_TEST_TIMERS_UART_BIN := $(BUILD_DIR)/test_timers_uart_host
 HOST_TEST_TIMERS_UART_SRCS := tests/test_timers_uart_host.c \
                               kernel/shell.c \
+                              kernel/mm.c \
                               drivers/ulp.c \
                               drivers/intc.c \
                               drivers/system.c \
@@ -305,6 +308,26 @@ HOST_TEST_WORLD_ISOLATION_SRCS := tests/test_world_isolation_host.c \
                                   drivers/wdt.c \
                                   drivers/systimer.c
 
+HOST_TEST_MM_STACK_BIN := $(BUILD_DIR)/test_mm_stack_host
+HOST_TEST_MM_STACK_SRCS := tests/test_mm_stack_host.c \
+                           kernel/mm.c \
+                           kernel/shell.c \
+                           drivers/ulp.c \
+                           kernel/amp.c \
+                           kernel/syscall.c \
+                           kernel/sched.c \
+                           kernel/timer.c \
+                           kernel/ipc.c \
+                           kernel/sync.c \
+                           kernel/kprintf.c \
+                           drivers/world.c \
+                           drivers/pms.c \
+                           drivers/system.c \
+                           drivers/ipi.c \
+                           drivers/uart.c \
+                           drivers/wdt.c \
+                           drivers/systimer.c
+
 HAVE_XTENSA_CC := $(shell command -v $(CC) 2>/dev/null)
 ifneq ($(strip $(HAVE_XTENSA_CC)),)
     HOST_CHECK_TARGET_DEPS := $(BUILD_DIR)/radixos.bin $(BUILD_DIR)/radixos.elf
@@ -350,6 +373,10 @@ host-check: $(HOST_CHECK_TARGET_DEPS)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_WORLD_ISOLATION_BIN)"
 	@echo "Running RadixOS host simulation (Feature 4 Per-Task PMS & World 1 Isolation)..."
 	@$(HOST_TEST_WORLD_ISOLATION_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(ULP_FW_FLAGS) $(INCLUDES) $(HOST_TEST_MM_STACK_SRCS) -o $(HOST_TEST_MM_STACK_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_MM_STACK_BIN)"
+	@echo "Running RadixOS host simulation (Feature 5 Deterministic MM & Stack Guard)..."
+	@$(HOST_TEST_MM_STACK_BIN)
 	@if [ -f "$(BUILD_DIR)/radixos.bin" ]; then \
 		$(PYTHON) tools/mk_esp32s3_image.py --verify $(BUILD_DIR)/radixos.bin; \
 		bin_size=$$(wc -c < $(BUILD_DIR)/radixos.bin); \
