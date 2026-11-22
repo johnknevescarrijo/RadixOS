@@ -57,4 +57,11 @@ void sched_unblock_task(tcb_t *task);
 const tcb_t *sched_get_task_by_index(uint32_t index);
 bool sched_kill_task(uint32_t task_id);
 
+/* Stack canary & high-water mark diagnostics */
+bool     task_check_stack_canary(const tcb_t *task);
+size_t   task_stack_high_water_mark(const tcb_t *task);
+size_t   task_stack_free_min_bytes(const tcb_t *task);
+uint32_t sched_check_all_stacks(void);
+uint32_t sched_get_stack_overflow_count(void);
+
 #endif /* RADIX_SCHED_H */

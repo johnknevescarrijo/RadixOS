@@ -6,6 +6,9 @@
 
 #define TASK_NAME_MAX_LEN       16
 #define TASK_STACK_MIN_SIZE     1024
+#define TASK_STACK_CANARY_SIZE  16u
+#define TASK_STACK_CANARY_MAGIC 0xDEADBEEFu
+#define TASK_STACK_PAINT_BYTE   0xA5u
 
 /* Task execution states */
 typedef enum {
