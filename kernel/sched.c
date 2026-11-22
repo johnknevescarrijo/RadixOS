@@ -1,4 +1,5 @@
 #include <radix/sched.h>
+#include <radix/timer.h>
 #include <radix/hal.h>
 #include <radix/atomic.h>
 #include <radix/kprintf.h>
@@ -51,6 +52,7 @@ void sched_init(void) {
     s_isr_depth = 0;
     s_need_resched = false;
     s_total_ticks = 0;
+    ktimer_reset_all();
 
     /* Create the idle task at lowest priority 0 */
     int idle_id = task_create("idle_task", idle_task_entry, NULL, 0,
@@ -315,6 +317,8 @@ void sched_tick(void) {
     }
 
     arch_irq_restore(flags);
+
+    ktimer_tick(now);
 
     if (need_resched) {
         if (sched_in_isr()) {

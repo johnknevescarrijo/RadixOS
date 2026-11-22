@@ -44,6 +44,7 @@ SRCS_S := arch/xtensa/boot.S \
 SRCS_C := kernel/main.c \
           kernel/kprintf.c \
           kernel/sched.c \
+          kernel/timer.c \
           kernel/sync.c \
           kernel/ipc.c \
           kernel/amp.c \
@@ -92,6 +93,7 @@ $(BUILD_DIR)/%.o: %.c
 HOST_TEST_SCHED_BIN := $(BUILD_DIR)/test_sched_host
 HOST_TEST_SCHED_SRCS := tests/test_sched_host.c \
                         kernel/sched.c \
+                        kernel/timer.c \
                         kernel/sync.c \
                         kernel/ipc.c \
                         kernel/kprintf.c \
@@ -102,6 +104,7 @@ HOST_TEST_SCHED_SRCS := tests/test_sched_host.c \
 HOST_TEST_SYNC_IPC_BIN := $(BUILD_DIR)/test_sync_ipc_host
 HOST_TEST_SYNC_IPC_SRCS := tests/test_sync_ipc_host.c \
                            kernel/sched.c \
+                           kernel/timer.c \
                            kernel/sync.c \
                            kernel/ipc.c \
                            kernel/kprintf.c \
@@ -115,6 +118,7 @@ HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
                       kernel/ipc.c \
                       kernel/sync.c \
                       kernel/sched.c \
+                      kernel/timer.c \
                       kernel/kprintf.c \
                       drivers/system.c \
                       drivers/ipi.c \
@@ -127,6 +131,7 @@ HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
                               kernel/amp.c \
                               kernel/syscall.c \
                               kernel/sched.c \
+                              kernel/timer.c \
                               kernel/ipc.c \
                               kernel/sync.c \
                               kernel/kprintf.c \
@@ -145,6 +150,7 @@ HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             kernel/amp.c \
                             kernel/syscall.c \
                             kernel/sched.c \
+                            kernel/timer.c \
                             kernel/ipc.c \
                             kernel/sync.c \
                             kernel/kprintf.c \
@@ -163,6 +169,7 @@ HOST_TEST_INTC_SRCS := tests/test_intc_host.c \
                        drivers/ipi.c \
                        kernel/amp.c \
                        kernel/sched.c \
+                       kernel/timer.c \
                        kernel/ipc.c \
                        kernel/sync.c \
                        kernel/kprintf.c \
