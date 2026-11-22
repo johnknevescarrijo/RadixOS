@@ -266,7 +266,26 @@ HOST_TEST_TIMERS_UART_SRCS := tests/test_timers_uart_host.c \
                               drivers/wdt.c \
                               drivers/systimer.c
 
-host-check: $(ULP_FW_DEP)
+HOST_TEST_BUILD_ULP_BIN := $(BUILD_DIR)/test_build_ulp_host
+HOST_TEST_BUILD_ULP_SRCS := tests/test_build_ulp_host.c \
+                            drivers/ulp.c \
+                            kernel/sched.c \
+                            kernel/timer.c \
+                            kernel/sync.c \
+                            kernel/ipc.c \
+                            kernel/kprintf.c \
+                            drivers/uart.c \
+                            drivers/wdt.c \
+                            drivers/systimer.c
+
+HAVE_XTENSA_CC := $(shell command -v $(CC) 2>/dev/null)
+ifneq ($(strip $(HAVE_XTENSA_CC)),)
+    HOST_CHECK_TARGET_DEPS := $(BUILD_DIR)/radixos.bin $(BUILD_DIR)/radixos.elf
+else
+    HOST_CHECK_TARGET_DEPS := $(ULP_FW_DEP)
+endif
+
+host-check: $(HOST_CHECK_TARGET_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SCHED_SRCS) -o $(HOST_TEST_SCHED_BIN)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_SCHED_BIN)"
@@ -296,6 +315,25 @@ host-check: $(ULP_FW_DEP)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_TIMERS_UART_BIN)"
 	@echo "Running RadixOS host simulation (Timed Sleep, Software Timers & UART RX IRQ)..."
 	@$(HOST_TEST_TIMERS_UART_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(ULP_FW_FLAGS) $(INCLUDES) $(HOST_TEST_BUILD_ULP_SRCS) -o $(HOST_TEST_BUILD_ULP_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_BUILD_ULP_BIN)"
+	@echo "Running RadixOS host simulation (Build Image & ULP Invariants)..."
+	@$(HOST_TEST_BUILD_ULP_BIN)
+	@if [ -f "$(BUILD_DIR)/radixos.bin" ]; then \
+		$(PYTHON) tools/mk_esp32s3_image.py --verify $(BUILD_DIR)/radixos.bin; \
+		bin_size=$$(wc -c < $(BUILD_DIR)/radixos.bin); \
+		if [ "$$bin_size" -ge 262144 ]; then \
+			echo "[FAIL] $(BUILD_DIR)/radixos.bin size ($$bin_size) >= 256 KB!" >&2; \
+			exit 1; \
+		fi; \
+	fi
+	@if [ -f "$(BUILD_DIR)/radixos.elf" ]; then \
+		if $(CROSS_COMPILE)nm $(BUILD_DIR)/radixos.elf | grep -q "ulp_simulate_wakeup_cycle"; then \
+			echo "[FAIL] ulp_simulate_wakeup_cycle leaked into target ELF!" >&2; \
+			exit 1; \
+		fi; \
+		echo "[VERIFY OK] $(BUILD_DIR)/radixos.elf contains no host ULP simulation symbols."; \
+	fi
 
 clean:
 	rm -rf $(BUILD_DIR)
