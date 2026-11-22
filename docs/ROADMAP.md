@@ -65,7 +65,7 @@ RadixOS is built around three guiding tenets:
 ---
 
 ### Step 3: Atomic Synchronization (`S32C1I`) & Zero-Copy IPC Channels
-- **Status**: *Planned*
+- **Status**: **Implemented**
 - **Target Specifications**:
   - **Hardware Atomics**: Implement atomic operations utilizing the Xtensa LX7 `S32C1I` (Conditional Store 32-bit) instruction.
     - Register `SCOMPARE1` holds the expected value.
@@ -79,7 +79,7 @@ RadixOS is built around three guiding tenets:
 ---
 
 ### Step 4: Asymmetric Multiprocessing (AMP) — Core 1 Bring-Up & Lock-Free IPIs
-- **Status**: *Planned*
+- **Status**: **Implemented**
 - **Target Specifications**:
   - **Core 1 (APP_CPU) Bootstrap**:
     - PRO_CPU releases APP_CPU from reset via System Register `SYSTEM_CORE_1_CONTROL_0_REG` (`0x600C0000`).
@@ -95,7 +95,7 @@ RadixOS is built around three guiding tenets:
 ---
 
 ### Step 5: Hardware Isolation — World Controller (`World 0`/`1`), PMS MPU & Syscalls
-- **Status**: *Planned*
+- **Status**: **Implemented**
 - **Target Specifications**:
   - **ESP32-S3 World Controller**:
     - The hardware supports two operational "Worlds":
@@ -112,7 +112,7 @@ RadixOS is built around three guiding tenets:
 ---
 
 ### Step 6: Interactive Kernel Shell & RISC-V ULP Co-Processor Offloading
-- **Status**: *Planned*
+- **Status**: **Implemented**
 - **Target Specifications**:
   - **Interactive Kernel Shell (Radix-CLI)**:
     - Non-blocking UART serial command parser.
@@ -150,10 +150,10 @@ RadixOS is built around three guiding tenets:
 ## Verification & Quality Assurance Strategy
 
 1. **Host-Level Unit Testing (`make host-check`)**:
-   - Isolates hardware-specific register operations behind mock HAL interfaces.
-   - Evaluates scheduler task state transitions, FIFO priority sorting, yield operations, and time-slice expiration.
+   - Isolates hardware-specific register operations behind `RADIX_HOST_TEST` HAL interfaces.
+   - Runs 8 host suites covering: Step 1–2 scheduler & `kprintf`, Step 3 atomics/sync/IPC, Step 4 AMP/IPI, Step 5 World/PMS/syscalls, Step 6 shell & ULP, Interrupt Matrix & deferred ISR preemption, timed sleep/`ktimer_t`/UART0 RX IRQ, and build/image/ULP invariants.
    - Zero external library dependencies; builds cleanly with `-Wall -Wextra -Werror -std=c11`.
-2. **Target Assembly & Linker Validation (`make`)**:
-   - Asserts proper vector alignment (Xtensa vector offsets must match hardware specifications).
-   - Generates `.map` file to audit symbol placement across IRAM and DRAM regions.
-   - Flat binary generation for direct flashing via `esptool.py`.
+2. **Target Assembly, Linker & Image Validation (`make`, `make flash-image`)**:
+   - Asserts proper vector alignment (Xtensa vector offsets must match hardware specifications) and verifies no host simulation functions (`ulp_simulate_wakeup_cycle`) leak into `build/radixos.elf`.
+   - Compiles `ulp/ulp_main.c` with RV32IMC toolchain (or documented fallback) and asserts firmware fits before the RTC mailbox at `0x50001F00`.
+   - Generates compact ESP32-S3 ROM images via `tools/mk_esp32s3_image.py` (`chip_id = 0x0009`, XOR checksum + SHA-256 digest, `< 256 KB` without the 7 MB DRAM-to-IRAM `objcopy` gap) and 4 MB flash images for `make qemu` / `make flash`.

@@ -1,13 +1,13 @@
 /*
  * RadixOS ESP32-S3 RISC-V ULP Coprocessor Firmware
- * Executes in RTC Slow Memory to perform background sensing and telemetry.
+ * Executes in RTC Slow Memory (0x50000000) to perform background sensing and telemetry.
  */
 
 #include <stdint.h>
 
 #define DR_REG_RTCCNTL_BASE     0x60008000
-#define RTC_CNTL_COCPU_CTRL_REG (DR_REG_RTCCNTL_BASE + 0x0100)
-#define RTC_CNTL_COCPU_DONE     (1U << 21)
+#define RTC_CNTL_COCPU_CTRL_REG (DR_REG_RTCCNTL_BASE + 0x0104)
+#define RTC_CNTL_COCPU_DONE     (1U << 25)
 
 #define ULP_MAILBOX_ADDR        0x50001F00
 
@@ -26,12 +26,26 @@ typedef struct {
     volatile uint32_t fw_size_bytes;
 } ulp_rtc_mailbox_t;
 
-void _ulp_start(void) __attribute__((section(".entry")));
+void _ulp_start(void) __attribute__((naked, section(".entry")));
+void _ulp_main(volatile ulp_rtc_mailbox_t *mb) __attribute__((noreturn));
 
+/*
+ * Reset vector at 0x50000000:
+ * Initializes a0 to the shared RTC mailbox (0x50001F00), places the stack
+ * right below the mailbox, and jumps into _ulp_main.
+ */
 void _ulp_start(void)
 {
-    volatile ulp_rtc_mailbox_t *mb = (volatile ulp_rtc_mailbox_t *)ULP_MAILBOX_ADDR;
+    __asm__ volatile (
+        "lui  a0, 0x50002\n"
+        "addi a0, a0, -256\n"
+        "mv   sp, a0\n"
+        "j    _ulp_main\n"
+    );
+}
 
+void _ulp_main(volatile ulp_rtc_mailbox_t *mb)
+{
     /* Increment wakeup cycle count */
     mb->wakeup_count++;
 
@@ -51,11 +65,11 @@ void _ulp_start(void)
         mb->last_cmd = ULP_CMD_NONE;
     }
 
-    /* Signal COCPU DONE to RTC Controller */
+    /* Signal COCPU_DONE (BIT 25) to ESP32-S3 RTC Controller (0x60008104) */
     volatile uint32_t *cocpu_ctrl = (volatile uint32_t *)RTC_CNTL_COCPU_CTRL_REG;
     *cocpu_ctrl |= RTC_CNTL_COCPU_DONE;
 
-    /* Wait for sleep power-down */
+    /* Wait for RTC sleep power-down */
     while (1) {
         __asm__ volatile ("nop");
     }

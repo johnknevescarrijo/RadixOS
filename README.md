@@ -2,16 +2,17 @@
 
 > **A Minimalist, High-Performance Hybrid Operating System for the ESP32-S3 (Xtensa LX7 Dual-Core + RISC-V ULP)**
 
-RadixOS is a lightweight, bare-metal operating system engineered from the silicon up in **C99/C11** and **Xtensa LX7 Assembly**. It bypasses heavy runtime abstractions (such as FreeRTOS or the full ESP-IDF framework) to provide deterministic execution, ultra-fast context switching, and strict hardware-enforced isolation on the Espressif ESP32-S3 SoC.
+RadixOS is a lightweight, bare-metal operating system engineered from the silicon up in **C99/C11**, **Xtensa LX7 Assembly**, and **RISC-V RV32IMC**. It bypasses heavy runtime abstractions (such as FreeRTOS or the full ESP-IDF framework) to provide deterministic execution, interrupt-driven scheduling, hardware-enforced isolation, and a compact ESP32-S3 ROM-bootable image without SDK bloat.
 
 ---
 
 ## 🏛️ System Architecture
 
 RadixOS employs an **Evolutionary Hybrid Architecture** that combines:
-1. **Preemptive Nano-Kernel (SASOS)**: A single address space operating system with prioritized round-robin scheduling, hardware-assisted context switching, and microsecond-level tick resolution.
-2. **Asymmetric Multiprocessing (AMP)**: Core 0 (PRO_CPU) serves as the Kernel & I/O master, Core 1 (APP_CPU) is dedicated to isolated hard real-time application workloads, and the ULP (Ultra-Low Power) RISC-V co-processor performs background sensing.
-3. **Silicon-Enforced Isolation**: Leveraging the ESP32-S3 **World Controller** (World 0 for Supervisor / World 1 for User tasks) and the **Permission Management System (PMS)** to grant MPU-like spatial protection over internal SRAM and memory-mapped peripherals.
+1. **Preemptive Nano-Kernel (SASOS)**: Priority-based round-robin scheduler with Call0 context switching, deferred ISR preemption (`sched_enter_isr` / `sched_exit_isr`), `task_sleep_ms()` / `task_sleep_ticks()`, caller-allocated `ktimer_t` software timers, and microsecond-resolution 52-bit Systimer ticks.
+2. **Asymmetric Multiprocessing (AMP)**: Core 0 (`PRO_CPU`) handles kernel services, interrupt matrix routing, and interrupt-driven UART0 I/O; Core 1 (`APP_CPU`) executes isolated real-time workloads communicating via shared SRAM, `S32C1I` atomics, zero-copy SPSC channels, and hardware IPIs.
+3. **Silicon-Enforced Isolation**: ESP32-S3 **World Controller** (`World 0` Supervisor / `World 1` User) and **Permission Management System (PMS)** spatial protection with `syscall` trap gateway.
+4. **Interactive Radix-Shell & RISC-V ULP**: Non-blocking IRQ-backed UART0 shell (`help`, `info`, `ps`, `kill`, `amp`, `ulp`, `reboot`) and real RV32IMC firmware offloaded to RTC Slow Memory (`0x50000000`).
 
 ```mermaid
 graph TD
@@ -21,15 +22,15 @@ graph TD
         ULP[RISC-V ULP Co-Processor]
         PMS[World Controller & PMS MPU]
         RAM[Internal SRAM 512KB: IRAM + DRAM]
-        PERIPH[Hardware Peripherals: UART0, Systimer, WDT]
+        PERIPH[Hardware Peripherals: UART0, Systimer, INTC, WDT]
     end
 
     subgraph RadixOS Software Layers
         subgraph Core 0 - Kernel & IO
             K_BOOT[Bare-Metal Boot & Vectors]
-            K_SCHED[Preemptive Nano-Scheduler]
-            K_UART[Early Console & kprintf]
-            K_TIMER[Systimer Tick Driver]
+            K_SCHED[Preemptive Scheduler & ktimer_t]
+            K_UART[UART0 RX IRQ & Radix-Shell]
+            K_TIMER[Systimer & Interrupt Matrix]
         end
 
         subgraph Core 1 - Real-Time Worker
@@ -58,37 +59,25 @@ graph TD
     WORLD0 -.->|Full Access| PERIPH
     WORLD1 -.->|Restricted DRAM Only| RAM
 
-    ULP -.->|Low-Power Wakeup| PRO
+    ULP -.->|RTC Slow RAM Mailbox| PRO
 ```
-
----
-
-## 🚀 Key Features
-
-- **Direct Silicon Bootstrapping**: Zero dependencies on vendor SDK runtime initialization. Boots directly from reset vector into Xtensa assembly (`boot.S`), configures the processor state (`PS`), installs custom exception tables (`vectors.S`), zeros `.bss`, and hands off execution to `kernel_early_init()`.
-- **Lightweight Xtensa Context Switch**: Tailored callee-saved register save/restore sequence taking advantage of the Xtensa LX7 register architecture, minimizing interrupt latency and context save overhead.
-- **Hardware Systimer Driver**: Utilizes the 52-bit 16 MHz ESP32-S3 hardware Systimer with periodic alarm target comparisons instead of legacy timer groups.
-- **Micro-Footprint `kprintf` Engine**: Formatted serial logger implemented without standard libc bloat, supporting `%s`, `%d`, `%u`, `%x`, `%p`, and `%c`.
-- **Dual Validation Pipeline**:
-  - **Bare-metal Cross-Compilation**: Compiles directly to Xtensa ELF and flat binary via `xtensa-esp32s3-elf-gcc`.
-  - **Host Simulation & Unit Testing**: Complete host-based test harness (`make host-check`) allowing the scheduler logic, state transitions, and formatted logging to be validated on any standard Linux x86_64 host.
 
 ---
 
 ## 🗺️ Implementation Roadmap
 
-RadixOS is engineered in 6 progressive steps:
+All 6 architectural steps plus hardware interrupt routing, timers, and flashable build tooling are implemented:
 
 | Step | Milestone | Status | Description |
 | :---: | :--- | :---: | :--- |
-| **Step 1** | **Bare-Metal Boot & Early Console** | **Implemented** | IRAM/DRAM Linker script, `boot.S`, `vectors.S`, Watchdog neutralizer, Polled UART0 driver, and `kprintf`. |
-| **Step 2** | **Preemptive Nano-Kernel Scheduler** | **Implemented** | Task Control Block (TCB), Xtensa assembly context switch, 52-bit Systimer periodic tick, and round-robin scheduler. |
-| **Step 3** | **Atomic Synchronization & Zero-Copy IPC** | *Planned* | Hardware atomics (`S32C1I`), spinlocks, and single-producer single-consumer lock-free ring buffers. |
-| **Step 4** | **Asymmetric Multiprocessing (AMP)** | *Planned* | Bringing up Core 1 (APP_CPU), inter-processor interrupts (IPI), and memory barriers (`MEMW`). |
-| **Step 5** | **Hardware Isolation & Syscalls** | *Planned* | ESP32-S3 World Controller (`World 0` vs `World 1`), PMS MPU configuration, and unprivileged user tasks. |
-| **Step 6** | **Kernel Shell & RISC-V ULP Offloading** | *Planned* | Interactive serial command shell and deep-sleep offloading to the integrated RISC-V ULP co-processor. |
+| **Step 1** | **Bare-Metal Boot & Early Console** | **Implemented** | IRAM/DRAM Linker script, `boot.S`, `vectors.S`, Watchdog neutralizer, UART0 driver, and `kprintf`. |
+| **Step 2** | **Preemptive Nano-Kernel Scheduler** | **Implemented** | TCB, Xtensa Call0 context switch, 52-bit Systimer tick, Interrupt Matrix (`intc`), timed sleep & `ktimer_t`. |
+| **Step 3** | **Atomic Synchronization & Zero-Copy IPC** | **Implemented** | Hardware atomics (`S32C1I`), IRQ-safe spinlocks, blocking mutexes/semaphores, and SPSC lock-free ring buffers. |
+| **Step 4** | **Asymmetric Multiprocessing (AMP)** | **Implemented** | Core 1 (`APP_CPU`) bring-up (`boot_core1.S`), hardware IPIs, cross-core RPC, and `MEMW` barriers. |
+| **Step 5** | **Hardware Isolation & Syscalls** | **Implemented** | ESP32-S3 World Controller (`World 0` / `World 1`), PMS MPU regions, and `syscall` trap dispatcher. |
+| **Step 6** | **Kernel Shell & RISC-V ULP Offloading** | **Implemented** | Interrupt-driven UART0 RX shell (`Radix-Shell`), real RV32IMC ULP firmware build, and ESP32-S3 flashable image generator. |
 
-For deep technical architectural designs of all steps, refer to [docs/ROADMAP.md](docs/ROADMAP.md).
+For detailed register-level architecture and verification notes, refer to [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -96,74 +85,106 @@ For deep technical architectural designs of all steps, refer to [docs/ROADMAP.md
 
 ```
 RadixOS/
-├── Makefile                # Unified build system (cross-compilation + host-check)
-├── README.md               # System overview and architecture guide
+├── Makefile                    # Unified build system (target, ULP RV32IMC, host-check, flash, qemu)
+├── README.md                   # System overview and build guide
+├── AGENTS.md                   # Agent execution guide and ESP32-S3 specs
 ├── docs/
-│   └── ROADMAP.md          # Comprehensive 6-step implementation roadmap
+│   └── ROADMAP.md              # 6-step architectural roadmap and verification strategy
 ├── linker/
-│   └── esp32s3_ram.ld      # Linker script mapping ESP32-S3 SRAM (IRAM & DRAM)
-├── arch/
-│   └── xtensa/
-│       ├── boot.S          # Bare-metal reset vector, stack init, bss zeroing
-│       ├── vectors.S       # Xtensa LX7 exception and interrupt vector table
-│       ├── context_switch.S# Callee-saved context switch & first task dispatcher
-│       └── include/
-│           ├── xtensa_regs.h# Xtensa Special Registers (PS, VECBASE, EPC1, etc.)
-│           └── esp32s3_soc.h# Real MMIO register maps (UART0, Systimer, WDT, etc.)
+│   └── esp32s3_ram.ld          # Linker script mapping ESP32-S3 SRAM (IRAM & DRAM)
+├── arch/xtensa/
+│   ├── atomic.S                # S32C1I atomic compare-and-swap primitives
+│   ├── boot.S                  # Core 0 bare-metal reset vector, stack, VECBASE, .bss zeroing
+│   ├── boot_core1.S            # Core 1 (APP_CPU) boot trampoline
+│   ├── context_switch.S        # Call0 callee-saved context switch & task launcher
+│   ├── syscall_handler.S       # Low-level syscall trap entry/exit
+│   ├── vectors.S               # Xtensa LX7 exception & Level 1 interrupt vectors
+│   └── include/
+│       ├── esp32s3_soc.h       # ESP32-S3 TRM MMIO registers (UART, Systimer, INTC, WCL, RTC/ULP)
+│       └── xtensa_regs.h       # Xtensa Special Registers (PS, VECBASE, INTENABLE, etc.)
 ├── drivers/
-│   ├── uart.c              # ESP32-S3 UART0 driver (FIFO polling TX/RX)
-│   ├── wdt.c               # Neutralizes Timer Group 0/1, RTC, and Super WDTs
-│   └── systimer.c          # 52-bit 16 MHz Systimer periodic tick generator
-├── include/
-│   └── radix/
-│       ├── types.h         # Fixed-width types, BIT(), MMIO access macros
-│       ├── kprintf.h       # Lightweight kernel formatting interface
-│       ├── task.h          # TCB, CPU context structure, and task states
-│       ├── sched.h         # Scheduler API (init, task_create, yield, tick)
-│       └── hal.h           # Hardware abstraction layer interface
+│   ├── intc.c                  # ESP32-S3 Interrupt Matrix driver
+│   ├── ipi.c                   # Inter-Processor Interrupts (CPU_INTR_FROM_CPU_0/1)
+│   ├── pms.c                   # Permission Management System (SRAM MPU)
+│   ├── system.c                # Core 1 reset/clock control
+│   ├── systimer.c              # 52-bit 16 MHz Systimer periodic tick driver
+│   ├── uart.c                  # UART0 driver (TX polling + RX IRQ ring buffer)
+│   ├── ulp.c                   # RISC-V ULP RTC COCPU driver & shared mailbox
+│   ├── wdt.c                   # TIMG0/1, RTC, and Super WDT neutralizer
+│   └── world.c                 # World Controller (World 0 <-> World 1)
+├── include/radix/              # Kernel headers (amp, atomic, hal, intc, ipc, kprintf, pms, sched, shell, sync, syscall, task, timer, types, uart, ulp)
 ├── kernel/
-│   ├── main.c              # System entry point and demonstration tasks
-│   ├── kprintf.c           # Tiny, dependency-free printf implementation
-│   └── sched.c             # Round-robin preemptive scheduler implementation
+│   ├── amp.c                   # Dual-core AMP initialization and remote call dispatch
+│   ├── ipc.c                   # Zero-copy SPSC IPC channels
+│   ├── kprintf.c               # Freestanding formatted console logger
+│   ├── main.c                  # Early init, IRQ routing, and kernel workloads
+│   ├── sched.c                 # Priority round-robin scheduler, deferred ISR preemption & sleep
+│   ├── shell.c                 # Radix-Shell CLI (help, info, ps, kill, amp, ulp, reboot)
+│   ├── sync.c                  # Spinlocks, mutexes, and semaphores
+│   ├── syscall.c               # Syscall table and World 1->0 dispatch
+│   └── timer.c                 # Caller-allocated software timers (ktimer_t)
+├── ulp/
+│   ├── ulp_main.c              # RV32IMC ULP coprocessor firmware (RTC Slow RAM)
+│   └── ulp.ld                  # ULP linker script (0x50000000..0x50001EFF + mailbox at 0x50001F00)
+├── tools/
+│   ├── mk_esp32s3_image.py     # ESP32-S3 ROM image generator/verifier & 4 MB flash image builder
+│   └── bin2c.py                # Converts compiled ulp_main.bin into build/ulp_fw_bin.h
 └── tests/
-    └── test_sched_host.c   # Host test suite validating scheduler state machine
+    ├── test_sched_host.c       # Step 1 & 2 scheduler & kprintf host tests
+    ├── test_sync_ipc_host.c    # Step 3 atomics, spinlocks, mutex, sem & IPC host tests
+    ├── test_amp_host.c         # Step 4 AMP & IPI host tests
+    ├── test_pms_syscall_host.c # Step 5 World Controller, PMS & syscalls host tests
+    ├── test_shell_ulp_host.c   # Step 6 Radix-Shell & ULP host tests
+    ├── test_intc_host.c        # Interrupt Matrix & deferred ISR preemption host tests
+    ├── test_timers_uart_host.c # Timed sleep, ktimer_t & UART0 RX IRQ host tests
+    └── test_build_ulp_host.c   # ULP bounds/state machine & ESP32-S3 image verification tests
 ```
 
 ---
 
-## 🛠️ Building & Testing
+## 🛠️ Building, Flashing & Testing
 
 ### 1. Prerequisites
-- **Host Testing**: Any modern C compiler (`gcc` or `clang`) with `make`.
-- **Target Cross-Compilation**: `xtensa-esp32s3-elf-gcc` (automatically detected in `~/.espressif/tools/` or via system `$PATH`).
+- **Host Testing**: `gcc` (or `clang`), `make`, and `python3`.
+- **Target Cross-Compilation**: `xtensa-esp32s3-elf-gcc` (auto-detected in `~/.espressif/tools/` or `$PATH`).
+- **ULP RISC-V Compilation (optional)**: `riscv32-esp-elf-gcc`, `riscv32-unknown-elf-gcc`, or `riscv64-unknown-elf-gcc` (auto-detected in `~/.espressif/tools/` or `$PATH`). If absent, the build emits an informational notice and embeds a documented RV32IMC fallback array.
+- **Flashing & Emulation (optional)**: `esptool` / `esptool.py` and Espressif `qemu-system-xtensa`.
 
-### 2. Validate on Host (Instant Unit Test & Logic Verification)
-You can compile and run the scheduler test suite directly on Linux:
-```bash
-make host-check
-```
-Output:
-```text
-Running RadixOS host simulation and scheduler tests...
-[INIT] RadixOS early initialization on Host Simulation
-[SCHED] Initialized scheduler with 0 active tasks
-[TASK] Created task 'worker_task' (id=1, prio=2)
-[TASK] Created task 'heartbeat_task' (id=2, prio=1)
-[TASK] Created task 'idle_task' (id=0, prio=0)
-[TEST] Scheduler state machine, round-robin yield, and tick verified successfully!
-```
-
-### 3. Build for ESP32-S3 Target
-To generate the target ELF and binary:
+### 2. Build ESP32-S3 Target & Flashable ROM Image
 ```bash
 make
 ```
-This produces:
-- `build/radixos.elf` (Xtensa LX7 ELF executable with symbol table)
-- `build/radixos.bin` (Raw flat binary ready for flashing)
-- `build/radixos.map` (Linker memory map)
+Produces:
+- `build/radixos.elf` — Xtensa LX7 ELF32 executable.
+- `build/radixos.bin` — Compact ESP32-S3 ROM bootloader image (~20 KB, generated by `tools/mk_esp32s3_image.py` directly from `PT_LOAD` segments without the ~7 MB DRAM-to-IRAM `objcopy` gap), complete with 24-byte ESP32-S3 extended header (`chip_id = 0x0009`), segment headers, XOR checksum, and SHA-256 digest.
+- `build/ulp_main.elf`, `build/ulp_main.bin`, `build/ulp_fw_bin.h` — Real RV32IMC ULP firmware compiled from `ulp/ulp_main.c` + `ulp/ulp.ld` (when a RISC-V GCC toolchain is present).
+- `build/radixos.map` — Linker memory map.
 
-To clean build artifacts:
+Verify an image standalone:
+```bash
+python3 tools/mk_esp32s3_image.py --verify build/radixos.bin
+```
+
+### 3. Validate All Subsystems on Host (`make host-check`)
+Compiles and executes all 8 host simulation suites, validates `build/radixos.bin` (< 256 KB, valid header/checksum/SHA-256), and verifies that `ulp_simulate_wakeup_cycle` is strictly absent from `build/radixos.elf`:
+```bash
+make host-check
+```
+
+### 4. Generate Raw Flash Image, Run QEMU, or Flash Hardware
+Create a 4 MB `0xFF`-padded SPI flash image (`build/radixos_flash.bin` with `radixos.bin` at offset `0x0000`):
+```bash
+make flash-image
+```
+Run in Espressif QEMU (`qemu-system-xtensa`, if installed):
+```bash
+make qemu
+```
+Flash to an ESP32-S3 board via `esptool`:
+```bash
+make flash ESP32S3_PORT=/dev/ttyUSB0 ESP32S3_BAUD=460800
+```
+Clean all build artifacts:
 ```bash
 make clean
 ```

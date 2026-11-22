@@ -40,7 +40,9 @@ bool ulp_start(uint32_t wakeup_period_us);
 void ulp_stop(void);
 volatile ulp_rtc_mailbox_t *ulp_get_mailbox(void);
 bool ulp_send_command(uint32_t cmd);
+#ifdef RADIX_HOST_TEST
 void ulp_simulate_wakeup_cycle(void);
+#endif
 const uint8_t *ulp_get_rtc_slow_mem_base(void);
 
 #endif /* RADIX_ULP_H */
