@@ -2,6 +2,7 @@
 #include <radix/hal.h>
 #include <radix/uart.h>
 #include <radix/kprintf.h>
+#include <radix/klog.h>
 #include <radix/sched.h>
 #include <radix/timer.h>
 #include <radix/sync.h>
@@ -139,6 +140,8 @@ static void worker_task(void *arg) {
 
 void kernel_early_init(void) {
     hal_early_init();
+    klog_init();
+    KLOG_INFO("RadixOS kernel boot started on Core 0");
 
     kputs("\n======================================================\n");
     kputs("  ____            _ _       ___  ____  \n");
@@ -165,6 +168,7 @@ void kernel_early_init(void) {
 
     /* Initialize deterministic kernel heap allocator */
     mm_init_default();
+    KLOG_INFO("World/PMS protection and deterministic heap initialized");
 
     /* Initialize Interrupt Matrix and route Core 0 IPI & UART0 RX handlers */
     intc_init(RADIX_CORE_0);
@@ -176,6 +180,7 @@ void kernel_early_init(void) {
 
     /* Initialize Asymmetric Multiprocessing (AMP) and Core 1 bring-up */
     amp_init();
+    KLOG_INFO("Interrupt matrix, UART0 RX IRQ and AMP dual-core initialized");
 
     /* Initialize RISC-V ULP Coprocessor and start periodic telemetry */
     ulp_init();
@@ -187,6 +192,7 @@ void kernel_early_init(void) {
 
     /* Initialize the nano-kernel scheduler */
     sched_init();
+    KLOG_INFO("ULP RV32IMC, Radix-Shell and scheduler ready");
 
     /* Initialize synchronization and zero-copy IPC */
     mutex_init(&s_stats_mutex);

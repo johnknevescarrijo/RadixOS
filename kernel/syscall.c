@@ -12,6 +12,8 @@
 #include <radix/ipc.h>
 #include <radix/hal.h>
 #include <radix/kprintf.h>
+#include <radix/panic.h>
+#include <radix/atomic.h>
 #include <xtensa_regs.h>
 
 static uint32_t s_total_syscalls = 0;
@@ -143,8 +145,10 @@ static bool syscall_is_violation_cause(uint32_t exccause) {
 }
 
 void radix_exception_handler_c(uint32_t exccause, uintptr_t epc1, uintptr_t excvaddr, uint32_t *regs) {
-    (void)regs;
     tcb_t *curr = sched_get_current_task();
+    const trap_frame_t *tf = (const trap_frame_t *)regs;
+
+    panic_dump_exception(exccause, (uint32_t)epc1, (uint32_t)excvaddr, tf);
 
     if (curr && curr->world == RADIX_WORLD_1_USER) {
         if (syscall_is_violation_cause(exccause)) {
@@ -158,11 +162,20 @@ void radix_exception_handler_c(uint32_t exccause, uintptr_t epc1, uintptr_t excv
         return;
     }
 
-    kprintf("[KERNEL-TRAP] Exception cause=%u at epc=0x%x, vaddr=0x%x\n",
-            (unsigned int)exccause, (unsigned int)epc1, (unsigned int)excvaddr);
+    kprintf("[KERNEL-TRAP] Exception cause=%u (%s) at epc=0x%x, vaddr=0x%x\n",
+            (unsigned int)exccause, panic_exccause_str(exccause),
+            (unsigned int)epc1, (unsigned int)excvaddr);
+#ifndef RADIX_HOST_TEST
+    /* Fatal World 0 kernel fault: halt safely */
+    arch_irq_save();
+    while (1) {
+        __asm__ volatile ("waiti 0");
+    }
+#else
     if (curr && curr->task_id != 0u) {
         task_exit();
     }
+#endif
 }
 
 /* User-Space Invocation Gate */
