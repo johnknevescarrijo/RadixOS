@@ -85,7 +85,8 @@ _double_exception_vector:
  *   0x4C: LBEG
  *   0x50: LEND
  *   0x54: LCOUNT
- *   0x58..0x5F: alignment padding
+ *   0x58: CALLER_WORLD (0 = World 0, 1 = World 1)
+ *   0x5C..0x5F: alignment padding
  */
 #define ISR_FRAME_SIZE 96
 
@@ -149,6 +150,10 @@ _level1_vector_handler:
     rsr     a0, SR_LCOUNT
     s32i    a0, a1, 0x54
 
+    /* Capture caller World and ensure Kernel World 0 during ISR execution */
+    call0   world_capture_and_enter_kernel
+    s32i    a2, a1, 0x58
+
     /* Compute pending = INTERRUPT & INTENABLE and clear latched edge/sw bits */
     rsr     a2, SR_INTERRUPT
     rsr     a3, SR_INTENABLE
@@ -167,6 +172,13 @@ _level1_vector_handler:
     call0   sched_yield
 
 .L_isr_restore:
+    /* Restore caller World if interrupted from World 1 */
+    l32i    a2, a1, 0x58
+    beqz    a2, .L_isr_skip_world_restore
+    l32i    a2, a1, 0x40    /* EPC1 */
+    call0   world_switch_to_user
+
+.L_isr_skip_world_restore:
     /* Restore special registers before general registers */
     l32i    a0, a1, 0x40
     wsr     a0, SR_EPC1

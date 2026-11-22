@@ -34,7 +34,8 @@
  *   0x44: PS
  *   0x48: EXCCAUSE
  *   0x4C: EXCVADDR
- *   0x50..0x5F: reserved
+ *   0x50: CALLER_WORLD (0 = World 0, 1 = World 1)
+ *   0x54..0x5F: reserved
  */
 #define TRAP_FRAME_SIZE 96
 
@@ -78,22 +79,27 @@ _xtensa_syscall_and_fault_entry:
     rsr     a0, SR_EXCVADDR
     s32i    a0, a1, 0x4C
 
+    /* Capture caller's real World before entering Kernel domain (World 0) */
+    call0   world_capture_and_enter_kernel
+    s32i    a2, a1, 0x50
+
     /* Read exception cause */
     l32i    a3, a1, 0x48
 
     /* Check if this is a syscall (EXCCAUSE == 1) */
     beqi    a3, EXCCAUSE_SYSCALL, .L_syscall_entry
 
-    /* Check memory/access violation causes */
+    /* Check memory/access/privilege violation causes */
     beqi    a3, EXCCAUSE_ILLEGAL_INSTRUCTION, .L_pms_violation_entry
+    beqi    a3, EXCCAUSE_INSTR_FETCH_ERROR, .L_pms_violation_entry
     beqi    a3, EXCCAUSE_LOAD_STORE_ERROR, .L_pms_violation_entry
+    beqi    a3, EXCCAUSE_PRIVILEGED, .L_pms_violation_entry
     movi    a4, EXCCAUSE_LOAD_PROHIBITED
     beq     a3, a4, .L_pms_violation_entry
     movi    a4, EXCCAUSE_STORE_PROHIBITED
     beq     a3, a4, .L_pms_violation_entry
 
     /* Otherwise, dispatch general exception */
-    call0   world_enter_kernel_from_trap
     l32i    a2, a1, 0x48    /* exccause */
     l32i    a3, a1, 0x40    /* epc1 */
     l32i    a4, a1, 0x4C    /* excvaddr */
@@ -106,9 +112,6 @@ _xtensa_syscall_and_fault_entry:
     l32i    a3, a1, 0x40
     addi    a3, a3, 3
     s32i    a3, a1, 0x40
-
-    /* Switch logical/hardware domain back to Kernel */
-    call0   world_enter_kernel_from_trap
 
     /*
      * Call radix_syscall_dispatch(syscall_id, arg1, arg2, arg3, arg4)
@@ -124,16 +127,9 @@ _xtensa_syscall_and_fault_entry:
     /* Store return value into saved a2 slot */
     s32i    a2, a1, 0x08
 
-    /* Switch domain back to World 1 (User) with return address */
-    l32i    a2, a1, 0x40
-    call0   world_switch_to_user
-
     j       .L_restore_and_rfe
 
 .L_pms_violation_entry:
-    /* Notify World Controller of trap into Kernel */
-    call0   world_enter_kernel_from_trap
-
     /* Call pms_handle_violation_exception(exccause, excvaddr) */
     l32i    a2, a1, 0x48    /* exccause */
     l32i    a3, a1, 0x4C    /* excvaddr */
@@ -143,6 +139,13 @@ _xtensa_syscall_and_fault_entry:
     j       .L_restore_and_rfe
 
 .L_restore_and_rfe:
+    /* Restore caller's World: only World 1 returns via WCL PREPARE/UPDATE */
+    l32i    a2, a1, 0x50
+    beqz    a2, .L_skip_world_restore
+    l32i    a2, a1, 0x40    /* EPC1 */
+    call0   world_switch_to_user
+
+.L_skip_world_restore:
     /* Restore special registers EPC1 and PS */
     l32i    a0, a1, 0x40
     wsr     a0, SR_EPC1
