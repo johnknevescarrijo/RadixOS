@@ -50,6 +50,7 @@ SRCS_C := kernel/main.c \
           kernel/syscall.c \
           kernel/shell.c \
           drivers/system.c \
+          drivers/intc.c \
           drivers/ipi.c \
           drivers/world.c \
           drivers/pms.c \
@@ -155,6 +156,20 @@ HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             drivers/wdt.c \
                             drivers/systimer.c
 
+HOST_TEST_INTC_BIN := $(BUILD_DIR)/test_intc_host
+HOST_TEST_INTC_SRCS := tests/test_intc_host.c \
+                       drivers/intc.c \
+                       drivers/system.c \
+                       drivers/ipi.c \
+                       kernel/amp.c \
+                       kernel/sched.c \
+                       kernel/ipc.c \
+                       kernel/sync.c \
+                       kernel/kprintf.c \
+                       drivers/uart.c \
+                       drivers/wdt.c \
+                       drivers/systimer.c
+
 host-check:
 	@mkdir -p $(BUILD_DIR)
 	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SCHED_SRCS) -o $(HOST_TEST_SCHED_BIN)
@@ -177,6 +192,10 @@ host-check:
 	@echo "[HOST_CC] Compiled $(HOST_TEST_SHELL_ULP_BIN)"
 	@echo "Running RadixOS host simulation (Step 6 Shell & RISC-V ULP Coprocessor)..."
 	@$(HOST_TEST_SHELL_ULP_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_INTC_SRCS) -o $(HOST_TEST_INTC_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_INTC_BIN)"
+	@echo "Running RadixOS host simulation (Interrupt Matrix & Deferred Preemption)..."
+	@$(HOST_TEST_INTC_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)

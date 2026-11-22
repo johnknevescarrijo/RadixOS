@@ -5,6 +5,8 @@
 static tcb_t s_tasks[MAX_TASKS];
 static int   s_current_task_idx = -1;
 static uint32_t s_next_task_id = 1;
+static volatile uint32_t s_isr_depth = 0;
+static volatile bool s_need_resched = false;
 
 static uint8_t s_idle_stack[IDLE_TASK_STACK_SIZE] __attribute__((aligned(16)));
 
@@ -43,6 +45,8 @@ void sched_init(void) {
     }
     s_current_task_idx = -1;
     s_next_task_id = 1;
+    s_isr_depth = 0;
+    s_need_resched = false;
 
     /* Create the idle task at lowest priority 0 */
     int idle_id = task_create("idle_task", idle_task_entry, NULL, 0,
@@ -172,11 +176,44 @@ void arch_start_first_task(cpu_context_t *first_ctx) {
 }
 #endif
 
+void sched_enter_isr(void) {
+    s_isr_depth++;
+}
+
+void sched_exit_isr(void) {
+    if (s_isr_depth > 0u) {
+        s_isr_depth--;
+    }
+}
+
+bool sched_in_isr(void) {
+    return (s_isr_depth > 0u);
+}
+
+void sched_set_need_resched(void) {
+    s_need_resched = true;
+}
+
+bool sched_need_resched(void) {
+    return s_need_resched;
+}
+
+bool sched_consume_need_resched(void) {
+    if (s_isr_depth > 0u || !s_need_resched) {
+        return false;
+    }
+    s_need_resched = false;
+    return true;
+}
+
 void sched_yield(void) {
     int next_idx = sched_select_next_task();
 
     if (next_idx == s_current_task_idx && s_tasks[next_idx].state == TASK_STATE_RUNNING) {
-        /* Task continues running */
+        /* Task continues running; replenish slice if exhausted */
+        if (s_tasks[next_idx].slice_remaining == 0) {
+            s_tasks[next_idx].slice_remaining = DEFAULT_TIME_SLICE_TICKS;
+        }
         return;
     }
 
@@ -212,7 +249,11 @@ void sched_tick(void) {
     }
 
     if (curr->slice_remaining == 0) {
-        sched_yield();
+        if (sched_in_isr()) {
+            sched_set_need_resched();
+        } else {
+            sched_yield();
+        }
     }
 }
 

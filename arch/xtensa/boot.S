@@ -23,7 +23,12 @@ _start:
     wsr     a2, SR_VECBASE
     rsync
 
-    /* 4. Clear .bss section with 32-bit word stores */
+    /* 4. Configure ATOMCTL for atomic transactions (0x28: internal SRAM atomics) */
+    movi    a2, 0x28
+    wsr     a2, SR_ATOMCTL
+    rsync
+
+    /* 5. Clear .bss section with 32-bit word stores */
     movi    a2, _bss_start
     movi    a3, _bss_end
     movi    a4, 0
@@ -35,15 +40,15 @@ _start:
     j       .L_bss_loop
 
 .L_bss_done:
-    /* 5. Initialize Processor State (PS) for Level 0 interrupts enabled */
+    /* 6. Initialize Processor State (PS) for Level 0 interrupts enabled */
     movi    a2, 0x00000000      /* Call0 ABI: WOE=0, INTLEVEL=0, Ring=0 */
     wsr     a2, SR_PS
     rsync
 
-    /* 6. Call early kernel initialization (in C) */
+    /* 7. Call early kernel initialization (in C) */
     call0   kernel_early_init
 
-    /* 7. Trap CPU in low-power halt if kernel_early_init returns */
+    /* 8. Trap CPU in low-power halt if kernel_early_init returns */
 .L_halt:
     waiti   0
     j       .L_halt
