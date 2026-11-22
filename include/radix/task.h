@@ -10,6 +10,29 @@
 #define TASK_STACK_CANARY_MAGIC 0xDEADBEEFu
 #define TASK_STACK_PAINT_BYTE   0xA5u
 
+/* Core Affinity & SMP Constants */
+#ifndef RADIX_CORE_ANY
+#define RADIX_CORE_ANY          (-1)
+#endif
+#ifndef RADIX_CORE_0
+#define RADIX_CORE_0            0u
+#endif
+#ifndef RADIX_CORE_1
+#define RADIX_CORE_1            1u
+#endif
+#ifndef RADIX_NUM_CORES
+#define RADIX_NUM_CORES         2u
+#endif
+
+struct mutex;
+
+/* Wait-object types for blocked tasks */
+typedef enum {
+    TASK_WAIT_NONE = 0,
+    TASK_WAIT_MUTEX,
+    TASK_WAIT_SEM
+} task_wait_type_t;
+
 /* Task execution states */
 typedef enum {
     TASK_STATE_UNUSED = 0,
@@ -57,6 +80,8 @@ typedef struct tcb {
     uint32_t           task_id;
     char               name[TASK_NAME_MAX_LEN];
     uint32_t           priority;
+    uint8_t            base_priority;   /* Original priority before PI boost */
+    int8_t             core_affinity;   /* RADIX_CORE_ANY (-1), RADIX_CORE_0 (0), RADIX_CORE_1 (1) */
     task_state_t       state;
     cpu_context_t     *sp;              /* Saved stack pointer pointing to cpu_context */
     void              *stack_base;      /* Base of stack memory block */
@@ -66,6 +91,9 @@ typedef struct tcb {
     uint64_t           wake_tick;       /* Absolute tick at which a sleeping task wakes */
     world_id_t         world;           /* Execution World (WORLD_0 or WORLD_1) */
     pms_task_profile_t pms;             /* Per-task PMS protection profile */
+    task_wait_type_t   wait_type;       /* Sync primitive type if TASK_STATE_BLOCKED */
+    void              *wait_obj;        /* Pointer to mutex_t or semaphore_t if blocked */
+    struct mutex      *owned_mutexes;   /* Intrusive list of currently owned mutexes */
     bool               started;         /* True once initial context dispatch has occurred */
 } tcb_t;
 

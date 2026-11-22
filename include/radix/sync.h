@@ -29,19 +29,24 @@ void spinlock_release_irqrestore(spinlock_t *lock, uint32_t flags);
 typedef struct mutex {
     spinlock_t          lock;
     volatile uint32_t   locked;
+    uint32_t            lock_count;
     tcb_t              *owner;
+    struct mutex       *next_owned;
     tcb_t              *wait_queue[MAX_TASKS];
     uint8_t             head;
     uint8_t             tail;
     uint8_t             count;
 } mutex_t;
 
-#define MUTEX_INIT          { .lock = SPINLOCK_INIT, .locked = 0, .owner = NULL, .wait_queue = {0}, .head = 0, .tail = 0, .count = 0 }
+#define MUTEX_INIT          { .lock = SPINLOCK_INIT, .locked = 0, .lock_count = 0, .owner = NULL, .next_owned = NULL, .wait_queue = {0}, .head = 0, .tail = 0, .count = 0 }
 
 void mutex_init(mutex_t *mutex);
 void mutex_lock(mutex_t *mutex);
 bool mutex_trylock(mutex_t *mutex);
 void mutex_unlock(mutex_t *mutex);
+
+/* Scheduler task termination cleanup hook */
+void sync_on_task_killed(tcb_t *task);
 
 /* ========================================================================= */
 /* Counting Semaphore Primitive                                              */

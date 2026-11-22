@@ -3,6 +3,7 @@
 
 #include <radix/types.h>
 #include <radix/ipc.h>
+#include <radix/sync.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,9 +12,15 @@ extern "C" {
 /*
  * Processor Core IDs
  */
+#ifndef RADIX_CORE_0
 #define RADIX_CORE_0        0u
+#endif
+#ifndef RADIX_CORE_1
 #define RADIX_CORE_1        1u
+#endif
+#ifndef RADIX_NUM_CORES
 #define RADIX_NUM_CORES     2u
+#endif
 
 /*
  * Core Operational States
@@ -46,15 +53,26 @@ typedef enum {
 #define AMP_MSG_PONG           0x104
 
 /*
- * Remote Function Call Slot
+ * Remote Function Call Slot & Protected Queue
  */
+#define AMP_CALL_QUEUE_SIZE 8u
+
 typedef void (*amp_call_fn_t)(void *arg);
 
 typedef struct {
     amp_call_fn_t fn;
     void *arg;
     volatile uint32_t done;
+    volatile uint32_t *done_flag;
 } amp_call_slot_t;
+
+typedef struct {
+    spinlock_t lock;
+    amp_call_slot_t slots[AMP_CALL_QUEUE_SIZE];
+    uint32_t head;
+    uint32_t tail;
+    uint32_t count;
+} amp_call_queue_t;
 
 /*
  * Shared Multi-Core State Structure (Located in Internal SRAM)
@@ -67,6 +85,7 @@ typedef struct {
     volatile uint32_t ipi_rx_count[RADIX_NUM_CORES];
     volatile uint32_t resched_requests[RADIX_NUM_CORES];
     amp_call_slot_t call_mailbox[RADIX_NUM_CORES];
+    amp_call_queue_t call_queue[RADIX_NUM_CORES];
     ipc_channel_t ch_core0_to_core1;
     ipc_channel_t ch_core1_to_core0;
 } amp_shared_state_t;
@@ -95,7 +114,9 @@ amp_shared_state_t *amp_get_state(void);
 void amp_init(void);
 bool amp_send_to_core(uint32_t target_core, uint32_t msg_id, const void *payload, uint16_t len);
 bool amp_recv_from_peer(uint32_t *msg_id, void *payload_out, uint16_t *len_out);
+bool amp_enqueue_call(uint32_t target_core, amp_call_fn_t fn, void *arg);
 bool amp_call_on_core(uint32_t target_core, amp_call_fn_t fn, void *arg);
+uint32_t amp_drain_call_queue(uint32_t core_id);
 uint32_t amp_core1_poll_once(void);
 void kernel_core1_main(void);
 
@@ -104,6 +125,7 @@ void kernel_core1_main(void);
  */
 #ifdef RADIX_HOST_TEST
 void host_set_current_core_id(uint32_t core_id);
+void arch_host_set_core_id(uint32_t core_id);
 uint32_t system_get_core1_boot_addr(void);
 uint32_t system_get_core1_ctrl0_reg(void);
 uint32_t ipi_get_hardware_intr_reg(uint32_t core_id);

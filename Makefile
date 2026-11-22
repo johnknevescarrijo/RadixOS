@@ -198,6 +198,7 @@ HOST_TEST_AMP_SRCS := tests/test_amp_host.c \
                       kernel/kprintf.c \
                       drivers/world.c \
                       drivers/pms.c \
+                      drivers/intc.c \
                       drivers/system.c \
                       drivers/ipi.c \
                       drivers/uart.c \
@@ -217,6 +218,7 @@ HOST_TEST_PMS_SYSCALL_SRCS := tests/test_pms_syscall_host.c \
                               kernel/kprintf.c \
                               drivers/world.c \
                               drivers/pms.c \
+                              drivers/intc.c \
                               drivers/system.c \
                               drivers/ipi.c \
                               drivers/uart.c \
@@ -239,6 +241,7 @@ HOST_TEST_SHELL_ULP_SRCS := tests/test_shell_ulp_host.c \
                             kernel/kprintf.c \
                             drivers/world.c \
                             drivers/pms.c \
+                            drivers/intc.c \
                             drivers/system.c \
                             drivers/ipi.c \
                             drivers/uart.c \
@@ -312,6 +315,7 @@ HOST_TEST_WORLD_ISOLATION_SRCS := tests/test_world_isolation_host.c \
                                   kernel/kprintf.c \
                                   drivers/world.c \
                                   drivers/pms.c \
+                                  drivers/intc.c \
                                   drivers/system.c \
                                   drivers/ipi.c \
                                   drivers/uart.c \
@@ -334,6 +338,7 @@ HOST_TEST_MM_STACK_SRCS := tests/test_mm_stack_host.c \
                            kernel/kprintf.c \
                            drivers/world.c \
                            drivers/pms.c \
+                           drivers/intc.c \
                            drivers/system.c \
                            drivers/ipi.c \
                            drivers/uart.c \
@@ -356,11 +361,29 @@ HOST_TEST_KLOG_PANIC_SRCS := tests/test_klog_panic_host.c \
                              kernel/kprintf.c \
                              drivers/world.c \
                              drivers/pms.c \
+                             drivers/intc.c \
                              drivers/system.c \
                              drivers/ipi.c \
                              drivers/uart.c \
                              drivers/wdt.c \
                              drivers/systimer.c
+
+HOST_TEST_SYNC_MULTICORE_BIN := $(BUILD_DIR)/test_sync_multicore_host
+HOST_TEST_SYNC_MULTICORE_SRCS := tests/test_sync_multicore_host.c \
+                                 kernel/sync.c \
+                                 kernel/sched.c \
+                                 kernel/timer.c \
+                                 kernel/ipc.c \
+                                 kernel/amp.c \
+                                 kernel/kprintf.c \
+                                 drivers/intc.c \
+                                 drivers/system.c \
+                                 drivers/ipi.c \
+                                 drivers/world.c \
+                                 drivers/pms.c \
+                                 drivers/uart.c \
+                                 drivers/wdt.c \
+                                 drivers/systimer.c
 
 HAVE_XTENSA_CC := $(shell command -v $(CC) 2>/dev/null)
 ifneq ($(strip $(HAVE_XTENSA_CC)),)
@@ -415,6 +438,10 @@ host-check: $(HOST_CHECK_TARGET_DEPS)
 	@echo "[HOST_CC] Compiled $(HOST_TEST_KLOG_PANIC_BIN)"
 	@echo "Running RadixOS host simulation (Feature 6 klog, dmesg & Panic/Backtrace)..."
 	@$(HOST_TEST_KLOG_PANIC_BIN)
+	$(HOST_CC) -Wall -Wextra -Werror -std=c11 -DRADIX_HOST_TEST $(INCLUDES) $(HOST_TEST_SYNC_MULTICORE_SRCS) -o $(HOST_TEST_SYNC_MULTICORE_BIN)
+	@echo "[HOST_CC] Compiled $(HOST_TEST_SYNC_MULTICORE_BIN)"
+	@echo "Running RadixOS host simulation (Feature 7 Priority Inheritance, Wait-Queue & Multi-Core Sched)..."
+	@$(HOST_TEST_SYNC_MULTICORE_BIN)
 	@if [ -f "$(BUILD_DIR)/radixos.bin" ]; then \
 		$(PYTHON) tools/mk_esp32s3_image.py --verify $(BUILD_DIR)/radixos.bin; \
 		bin_size=$$(wc -c < $(BUILD_DIR)/radixos.bin); \
